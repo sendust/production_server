@@ -11,7 +11,10 @@ DEFAULTS = {
     "http": {"host": "0.0.0.0", "port": 8300},
     "auth": False,
     "password": "",
-    "ext_control": {"enabled": True, "key": "", "osc_port": 9250},
+    # external control (backend/ext.py); key also grants /api/v1 access (gang control server)
+    "ext_control": {"enabled": True, "key": "", "osc_port": 9250, "allow_ips": [], "aux1": "", "aux2": ""},
+    # gang control: browser origins (e.g. "http://gang-server:8300") allowed to call /api/v1 (CORS)
+    "gang": {"allow_origins": []},
     "casparcg": {
         "host": "127.0.0.1",
         "amcp_port": 5250,
@@ -33,7 +36,8 @@ DEFAULTS = {
     },
     "zoom_timeline": {"seconds": 5},
     "playlist": {"image_sec": 10},
-    "sdi_preview": {"rtsp_base": "rtsp://127.0.0.1:8554", "webrtc_port": 8889, "args": ""},
+    # args "" = sdi_preview.DEFAULT_ARGS (CasparCG ffmpeg consumer option syntax)
+    "sdi_preview": {"rtsp_base": "rtsp://127.0.0.1:8554", "path_prefix": "sendust_ch", "webrtc_port": 8889, "args": ""},
     "total_sdi_consumer": 0,
     "channels": [],
 }

@@ -3,7 +3,8 @@
   "http": { "host": "0.0.0.0", "port": 8300 },
   "auth": false,
   "password": "",
-  "ext_control": { "enabled": true, "key": "", "osc_port": 9250 },
+  "ext_control": { "enabled": true, "key": "", "osc_port": 9250, "allow_ips": [], "aux1": "", "aux2": "" },
+  "gang": { "allow_origins": [] },
 
   "casparcg": {
     "host": "127.0.0.1",
@@ -32,8 +33,9 @@
 
   "sdi_preview": {
     "rtsp_base": "rtsp://127.0.0.1:8554",
+    "path_prefix": "sendust_ch",
     "webrtc_port": 8889,
-    "args": "-vf yadif=0:-1:0,scale=960:540 -c:v h264_nvenc -preset p1 -tune ull -bf 0 -g 30 -b:v 2M -an -f rtsp -rtsp_transport tcp"
+    "args": ""
   },
 
   "total_sdi_consumer": 3,

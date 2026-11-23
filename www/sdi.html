@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist [SDI Preview]</title>
+<link rel="stylesheet" href="css/app.css">
+<style>
+  .sdi { display: flex; flex-direction: column; height: 100%; }
+  .sdi-video { flex: 1; min-height: 0; background: #000; position: relative; display: flex; align-items: center; justify-content: center; }
+  video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .sdi-msg { position: absolute; inset: auto 0 14px; text-align: center; color: var(--dim); pointer-events: none; }
+  .sdi-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 10px; }
+  .sdi-bar select { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+  .tbtn.on { background: var(--ok); color: #04130a; border-color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="app sdi">
+  <header class="top">
+    <span class="chname" id="title">SDI Preview</span>
+    <span class="route" id="route"></span>
+    <span class="conn"><span class="dim mono" id="stats"></span><span><i class="dot" id="d-rtc"></i>WebRTC</span></span>
+  </header>
+  <div class="panel sdi-video"><video id="v" autoplay muted playsinline></video><div class="sdi-msg" id="msg"></div></div>
+  <div class="panel sdi-bar">
+    <button class="tbtn" id="toggle" title="CasparCG ffmpeg consumer 추가/제거">PREVIEW OFF</button>
+    <label class="dim">Source <select id="source"><option value="osd">OSD (TC 포함)</option><option value="clean">Clean</option></select></label>
+    <span class="dim">CasparCG ffmpeg consumer → mediamtx → WebRTC · 비디오만 수신 · 1080p 29.97 · 켜져 있는 동안 CasparCG CPU 약 3~4코어 추가</span>
+  </div>
+</div>
+<script type="module">
+import { $, api, connectWs, toast } from "./js/common.js";
+const CH = Number(new URLSearchParams(location.search).get("ch") ?? 0);
+let st = null, pc = null, connecting = false, retryT = null, info = null;
+
+function whepUrl() { return `${location.protocol}//${location.hostname}:${st.webrtc_port}/${st.path}/whep`; }
+
+async function connect() {
+  if (connecting || !st?.active) return;
+  connecting = true;
+  clearTimeout(retryT);
+  try {
+    pc?.close();
+    pc = new RTCPeerConnection();
+    pc.addTransceiver("video", { direction: "recvonly" });   // video only, the Opus track is not requested
+    pc.ontrack = e => { $("#v").srcObject = new MediaStream([e.track]); };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      $("#d-rtc").classList.toggle("on", s === "connected");
+      $("#msg").textContent = s === "connected" ? "" : s;
+      if (s === "failed" || s === "disconnected" || s === "closed") retry();
+    };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise(res => {   // non-trickle WHEP: send the offer with all candidates
+      if (pc.iceGatheringState === "complete") return res();
+      pc.onicegatheringstatechange = () => pc.iceGatheringState === "complete" && res();
+      setTimeout(res, 1500);
+    });
+    const r = await fetch(whepUrl(), { method: "POST", headers: { "Content-Type": "application/sdp" }, body: pc.localDescription.sdp });
+    if (!r.ok) throw new Error(`WHEP ${r.status}`);
+    await pc.setRemoteDescription({ type: "answer", sdp: await r.text() });
+  } catch (e) {
+    $("#msg").textContent = `연결 실패: ${e.message} — 재시도 중`;
+    retry();
+  } finally { connecting = false; }
+}
+function retry() { clearTimeout(retryT); retryT = setTimeout(connect, 2000); }
+function disconnect() { pc?.close(); pc = null; $("#v").srcObject = null; $("#d-rtc").classList.remove("on"); }
+
+function apply(p) {
+  const prev = st;
+  st = p.sdi_preview;
+  document.title = `${info?.title ?? "sendust playlist"} [${p.name} · SDI Preview] {${info?.stamp ?? ""}}`;
+  $("#title").textContent = `SDI Preview · ${p.name}`;
+  $("#route").innerHTML = st.active ? `<span class="tag ok">CasparCG CH${st.channel} (${st.source})</span>` : st.enabled ? '<span class="tag bad">starting…</span>' : "";
+  const b = $("#toggle");
+  b.classList.toggle("on", st.enabled);
+  b.textContent = st.enabled ? "PREVIEW ON" : "PREVIEW OFF";
+  const srcSel = $("#source");
+  srcSel.querySelector("[value=osd]").disabled = !p.osd;
+  if (st.source) srcSel.value = st.source; else if (!p.osd) srcSel.value = "clean";
+  if (!st.enabled) { disconnect(); $("#msg").textContent = "PREVIEW OFF — 버튼을 눌러 켜세요"; }
+  else if (st.active && (!prev?.active || prev.path !== st.path || !pc)) setTimeout(connect, 800);
+}
+
+$("#toggle").onclick = () => api(`ch/${CH}/sdi_preview`, { on: !st?.enabled, source: $("#source").value }).catch(e => toast(e.message));
+$("#source").onchange = () => st?.enabled && api(`ch/${CH}/sdi_preview`, { on: true, source: $("#source").value }).then(() => { disconnect(); }).catch(e => toast(e.message));
+
+setInterval(async () => {   // receive stats
+  if (!pc) return;
+  const s = await pc.getStats();
+  s.forEach(r => {
+    if (r.type === "inbound-rtp" && r.kind === "video") {
+      const jb = r.jitterBufferEmittedCount ? (r.jitterBufferDelay / r.jitterBufferEmittedCount * 1000).toFixed(0) : "-";
+      $("#stats").textContent = `${r.frameWidth ?? "-"}×${r.frameHeight ?? "-"} ${r.framesPerSecond ?? "-"} fps · jitter buffer ${jb} ms · lost ${r.packetsLost}`;
+    }
+  });
+}, 1000);
+
+connectWs(m => {
+  if (m.type === "hello") info = m.info;
+  if (m.type === "hello" || m.type === "tick") {
+    const p = m.players?.find(x => x.idx === CH);
+    if (p && JSON.stringify(p.sdi_preview) !== JSON.stringify(st)) apply(p);
+  }
+});
+</script>
+</body>
+</html>

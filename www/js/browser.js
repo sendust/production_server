@@ -1,5 +1,5 @@
 // Media browser: midnight-commander style upper (CasparCG media path) / lower (/mnt) panes.
-import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA } from "./common.js";
+import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout } from "./common.js";
 
 const S = { info: null, favorites: [], jobs: new Map(), active: null, session: {} };
 const probeCache = new Map();   // media rel path -> info | "pending" | "error"
@@ -408,6 +408,7 @@ connectWs(async m => {
     for (const j of m.jobs || []) S.jobs.set(j.id, j);
     renderJobs();
     renderPlayers();
+    addLogout(m.info, $(".conn"));
     if (!started) {
       started = true;
       try { S.session = (await api("session")).session || {}; } catch { S.session = {}; }

@@ -109,3 +109,13 @@ export function toast(msg, ms = 3500) {
 }
 
 export const DND_MEDIA = "application/x-sendust-media";   // {root, paths[]}
+
+// logout link in a header (only when the server has auth enabled)
+export function addLogout(info, container) {
+  if (!info?.auth || !container || container.querySelector(".logout")) return;
+  const b = document.createElement("button");
+  b.className = "linkbtn logout";
+  b.textContent = "Logout";
+  b.onclick = async () => { await fetch("/api/v1/logout", { method: "POST" }); location.href = "/login.html"; };
+  container.append(b);
+}

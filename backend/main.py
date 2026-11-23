@@ -6,15 +6,21 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import socket
+from urllib.parse import quote as urlquote
+
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config as config_mod
 from . import osc
 from .amcp import Amcp, AmcpError
+from .auth import COOKIE, MAX_AGE, Auth
+from .ext import ExtControl, ExtError
 from .config import ROOT
 from .engine import Engine
 from .fsops import Conflict, FsError, Jobs, Roots
@@ -22,6 +28,7 @@ from .media import Media
 from .osd import Osd
 from . import scenes as scenes_mod
 from .player import Player
+from .sdi_preview import SdiPreview
 from .version import commit_stamp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -85,6 +92,9 @@ class App:
                                self.cfg["shared_playlist_path"], self.cfg["playlist"]["image_sec"])
                         for ch in self.cfg["channels"]]
         self.osd = Osd(self.cfg, self.amcp, self.engine, self.players, self.cfg["http"]["port"])
+        self.sdi = SdiPreview(self.cfg, self.amcp, self.engine, self.players)
+        self.auth = Auth(self.cfg)
+        self.ext = ExtControl(self)
         self.favorites = JsonStore(DATA / "favorites.json", list(self.cfg["browser"].get("favorites", [])))
         self.sessions = JsonStore(DATA / "sessions.json", {})
         self.osc_transport = None
@@ -100,6 +110,7 @@ class App:
 
     def info(self) -> dict:
         return {
+            "api_version": 1, "host": socket.gethostname(), "auth": self.auth.enabled,
             "title": self.cfg["title"], "stamp": self.stamp,
             "channels": self.cfg["channels"], "osd": self.cfg["osd"],
             "zoom_timeline": self.cfg["zoom_timeline"],
@@ -111,21 +122,24 @@ class App:
     async def start(self):
         self.osc_transport = await osc.listen(self.cfg["casparcg"]["osc_port"], self.engine.on_osc)
         self.amcp.start()
+        await self.ext.start_osc()
         self._ticker = asyncio.create_task(self._tick())
         self._osd_task = asyncio.create_task(self._osd_loop())
 
     async def _osd_loop(self):
         while True:
             await asyncio.sleep(1)
-            try:
-                await self.osd.ensure()
-            except Exception as e:  # keep the loop alive whatever happens
-                log.warning("osd ensure: %s", e)
+            for name, fn in (("osd", self.osd.ensure), ("sdi", self.sdi.ensure)):
+                try:
+                    await fn()
+                except Exception as e:  # keep the loop alive whatever happens
+                    log.warning("%s ensure: %s", name, e)
 
     async def stop(self):
         self._ticker.cancel()
         self._osd_task.cancel()
         await self.amcp.stop()
+        self.ext.stop()
         if self.osc_transport:
             self.osc_transport.close()
 
@@ -146,6 +160,7 @@ class App:
             s = p.snapshot()
             s["volume"] = peaks.get(p.clean, [])
             s["osd_state"] = self.osd.state(p)
+            s["sdi_preview"] = self.sdi.state(p)
             players.append(s)
         return {"type": "tick", "engine": self.engine.snapshot(), "amcp": self.amcp.connected, "players": players}
 
@@ -161,6 +176,87 @@ async def lifespan(_app: FastAPI):
 
 
 api = FastAPI(title="sendust playlist", lifespan=lifespan)
+
+if app_state.cfg["gang"].get("allow_origins"):
+    # gang control UI served from another host calls this API from the browser (X-Api-Key)
+    api.add_middleware(CORSMiddleware, allow_origins=app_state.cfg["gang"]["allow_origins"],
+                       allow_methods=["*"], allow_headers=["*"])
+
+
+@api.middleware("http")
+async def auth_guard(request: Request, call_next):
+    a = app_state.auth
+    if a.enabled and request.method != "OPTIONS":
+        path = request.url.path
+        if not a.allowed(path, client_ip(request), request.cookies.get(COOKIE), request.headers.get("x-api-key")):
+            if path.startswith(("/api/", "/media/", "/ws")):
+                return JSONResponse({"detail": "login required"}, status_code=401)
+            nxt = path + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse(f"/login.html?next={urlquote(nxt)}")
+    return await call_next(request)
+
+
+def ws_allowed(ws: WebSocket) -> bool:
+    return app_state.auth.allowed(ws.url.path, client_ip(ws), ws.cookies.get(COOKIE), ws.headers.get("x-api-key"))
+
+
+class Login(BaseModel):
+    password: str
+
+
+@api.post("/api/v1/login")
+async def login(b: Login, request: Request):
+    if not app_state.auth.enabled:
+        return {"ok": True, "auth": False}
+    if not app_state.auth.check_password(b.password):
+        log.warning("login failed from %s", client_ip(request))
+        await asyncio.sleep(1)   # slow down guessing
+        raise HTTPException(401, "wrong password")
+    r = JSONResponse({"ok": True})
+    r.set_cookie(COOKIE, app_state.auth.make_token(), max_age=MAX_AGE, httponly=True, samesite="lax")
+    log.info("login from %s", client_ip(request))
+    return r
+
+
+@api.post("/api/v1/logout")
+async def logout():
+    r = JSONResponse({"ok": True})
+    r.delete_cookie(COOKIE)
+    return r
+
+
+# ---------------------------------------------------------------- external control (MCU / show controller)
+@api.api_route("/ext/v1/{n}/{cmd}", methods=["GET", "POST"], response_class=PlainTextResponse)
+async def ext_cmd(n: int, cmd: str, request: Request, key: str | None = None):
+    ext = app_state.ext
+    try:
+        ext.check(client_ip(request), key or request.headers.get("x-api-key"))
+        if cmd == "status":
+            return PlainTextResponse(ext.status(n))
+        return PlainTextResponse(await ext.run(n, cmd, f"http {client_ip(request)}") + "\n")
+    except ExtError as e:
+        return PlainTextResponse(f"ERR {e}\n", status_code=e.status)
+    except AmcpError as e:
+        return PlainTextResponse(f"ERR casparcg {e.text or e}\n", status_code=502)
+    except (ValueError, OSError, RuntimeError) as e:
+        return PlainTextResponse(f"ERR {e}\n", status_code=400)
+
+
+@api.get("/api/v1/status")
+async def status_all():
+    """Compact state of every channel (gang control polls this)."""
+    out = []
+    for p in app_state.players:
+        s = p.snapshot()
+        ld = p.loaded
+        out.append({
+            "idx": p.idx, "n": p.idx + 1, "name": p.name, "status": s["status"], "pos": s["pos"],
+            "clip": ld["file"] if ld else None, "in": ld["in"] if ld else None, "out": ld["out"] if ld else None,
+            "fps": ld["info"]["fps"] if ld else None, "loop_mode": p.loop_mode, "playlist_play": p.pl.enabled,
+            "current_id": p.pl.current_id, "items": sum(1 for i in p.pl.items if i["type"] == "clip"),
+        })
+    return {"host": socket.gethostname(), "amcp": app_state.amcp.connected,
+            "osc": app_state.engine.snapshot()["osc_alive"], "channels": out}
 
 
 def client_ip(req: Request | WebSocket) -> str:
@@ -233,6 +329,7 @@ async def ch_state(idx: int):
     p = app_state.player(idx)
     snap = p.snapshot()
     snap["osd_state"] = app_state.osd.state(p)
+    snap["sdi_preview"] = app_state.sdi.state(p)
     return {"player": snap, "playlist": p.pl.view(), "logs": list(p.logs)}
 
 
@@ -269,6 +366,23 @@ CH_ACTIONS = {
     "loop": lambda p, b: p.set_loop_mode(b.mode or "none"),
     "eject": lambda p, b: p.eject(),
 }
+
+
+class SdiCmd(BaseModel):
+    on: bool
+    source: str | None = None   # clean | osd (default: osd when the channel has one)
+
+
+@api.post("/api/v1/ch/{idx}/sdi_preview")
+async def ch_sdi_preview(idx: int, b: SdiCmd):
+    p = app_state.player(idx)
+    try:
+        await app_state.sdi.set(p, b.on, b.source)
+    except AmcpError as e:
+        raise HTTPException(502, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "sdi_preview": app_state.sdi.state(p)}
 
 
 @api.post("/api/v1/ch/{idx}/{action}")
@@ -453,6 +567,9 @@ def osd_payload(p: Player) -> dict:
 @api.websocket("/ws/osd")
 async def ws_osd(ws: WebSocket, ch: int = 0):
     """Light feed for the CasparCG HTML overlay: config once, then player position at 25 Hz."""
+    if not ws_allowed(ws):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     try:
         p = app_state.player(ch)
@@ -487,6 +604,9 @@ async def osd_reload():
 # ---------------------------------------------------------------- websocket
 @api.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
+    if not ws_allowed(ws):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     hub = app_state.hub
     hub.clients.add(ws)

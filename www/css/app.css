@@ -33,6 +33,7 @@ header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dot.on { background: var(--ok); }
 .linkbtn { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 .linkbtn:hover { border-color: var(--accent); }
+.linkbtn.live { border-color: var(--ok); color: var(--ok); }
 
 /* ---- media info ---- */
 .info { padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: baseline; }

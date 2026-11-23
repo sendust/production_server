@@ -1,5 +1,5 @@
 // Playback control window: one page per playback channel (?ch=<channel_index>).
-import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, fmtBytes, esc, toast } from "./common.js";
+import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, fmtBytes, esc, toast, addLogout } from "./common.js";
 import { PlaylistUI } from "./playlist_ui.js";
 import { Scenes } from "./scenes.js";
 import { Timeline } from "./timeline.js";
@@ -116,6 +116,9 @@ function renderStatic() {
     $("#meta").innerHTML = '<span>no clip loaded</span>';
   }
   $("#loopmode").value = p?.loop_mode ?? "none";
+  const sp = p?.sdi_preview;
+  $("#btn-sdi").classList.toggle("live", !!sp?.active);
+  $("#btn-sdi").textContent = sp?.enabled ? (sp.active ? "SDI Preview ●" : "SDI Preview …") : "SDI Preview";
 }
 
 function renderLive() {
@@ -146,12 +149,12 @@ function renderLive() {
 }
 
 function applyPlayer(p) {
-  const prevKey = JSON.stringify([S.p?.status, S.p?.loaded, S.p?.loop_mode, S.p?.decklink, S.p?.osd_decklink, S.p?.osd_state]);
+  const prevKey = JSON.stringify([S.p?.status, S.p?.loaded, S.p?.loop_mode, S.p?.decklink, S.p?.osd_decklink, S.p?.osd_state, S.p?.sdi_preview]);
   const prevPre = S.p?.preloaded;
   const vol = p.volume;
   S.p = p; S.recvAt = performance.now() - (p.age || 0) * 1000;
   if (vol?.length) meter.push(vol);
-  if (JSON.stringify([p.status, p.loaded, p.loop_mode, p.decklink, p.osd_decklink, p.osd_state]) !== prevKey) renderStatic();
+  if (JSON.stringify([p.status, p.loaded, p.loop_mode, p.decklink, p.osd_decklink, p.osd_state, p.sdi_preview]) !== prevKey) renderStatic();
   if (p.preloaded !== prevPre) plui.render(); else plui.renderLive();
 }
 
@@ -181,6 +184,7 @@ connectWs(m => {
     (m.logs?.[CH] ?? []).forEach(addLog);
     if (m.playlists?.[CH]) plui.set(m.playlists[CH]);
     if (!scenes) makeScenes();
+    addLogout(m.info, $(".conn"));
   }
   if (m.type === "playlist" && m.ch === CH) plui.set(m.playlist);
   if (m.type === "hello" || m.type === "tick") {
@@ -202,6 +206,7 @@ $("#btn-goin").onclick = () => loaded() && cmd("seek", { frame: loaded().in });
 $("#btn-goout").onclick = () => loaded() && cmd("seek", { frame: loaded().out - 1 });
 $("#loopmode").onchange = e => cmd("loop", { mode: e.target.value });
 $("#btn-browser").onclick = () => window.open("/browser.html", "sendust_browser");
+$("#btn-sdi").onclick = () => window.open(`/sdi.html?ch=${CH}`, `sendust_sdi_${CH}`);
 
 document.addEventListener("keydown", e => {
   if (e.target.closest?.("input:not([type=range]):not([type=checkbox]), select, textarea, dialog")) return;

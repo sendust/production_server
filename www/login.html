@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist</title>
+<link rel="stylesheet" href="css/app.css">
+<style>
+  .login { height: 100%; display: flex; align-items: center; justify-content: center; }
+  form { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 24px; width: 320px; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 18px; margin: 0; }
+  input { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font-size: 15px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: 9px; font-weight: 600; cursor: pointer; }
+  .err { color: var(--bad); min-height: 18px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="login">
+  <form id="f">
+    <h1>sendust playlist</h1>
+    <input type="password" id="pw" placeholder="password" autocomplete="current-password" autofocus>
+    <button type="submit">Login</button>
+    <div class="err" id="err"></div>
+  </form>
+</div>
+<script>
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch("/api/v1/login", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: document.getElementById("pw").value }) });
+  if (r.ok) {
+    const next = new URLSearchParams(location.search).get("next");
+    location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  } else {
+    document.getElementById("err").textContent = r.status === 401 ? "비밀번호가 틀립니다" : `오류 ${r.status}`;
+    document.getElementById("pw").select();
+  }
+};
+</script>
+</body>
+</html>
