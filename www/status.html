@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist</title>
+<style>
+  :root { --bg:#111418; --fg:#d8dde3; --dim:#7d8792; --ok:#3fb950; --bad:#f85149; --line:#262c33; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:13px/1.4 ui-monospace,Menlo,Consolas,monospace; }
+  h1 { font-size:15px; margin:0 0 12px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--bad); margin-right:4px; }
+  .dot.on { background:var(--ok); }
+  .ch { border:1px solid var(--line); border-radius:6px; padding:10px; margin-bottom:10px; }
+  .meters { display:flex; gap:3px; height:80px; align-items:flex-end; margin:6px 0; }
+  .m { width:10px; background:#1d2329; height:100%; position:relative; }
+  .m i { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top,#2ea043 70%,#d29922 85%,#f85149 95%); }
+  .dim { color:var(--dim); }
+</style>
+</head>
+<body>
+<h1 id="title">sendust playlist</h1>
+<div><span id="amcp" class="dot"></span>AMCP &nbsp; <span id="osc" class="dot"></span>OSC <span id="rate" class="dim"></span></div>
+<div id="chs"></div>
+<script type="module">
+const $ = s => document.querySelector(s);
+let ws;
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "hello") $("#title").textContent = `${m.info.title} [status] {${m.info.stamp}}`;
+    if (m.engine) render(m.engine, m.amcp);
+    if (m.type === "amcp") $("#amcp").classList.toggle("on", m.connected);
+  };
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+function render(e, amcp) {
+  $("#amcp").classList.toggle("on", !!amcp);
+  $("#osc").classList.toggle("on", e.osc_alive);
+  $("#rate").textContent = `${e.osc_rate} msg/s`;
+  $("#chs").innerHTML = Object.entries(e.channels).map(([n, c]) => {
+    const meters = c.volume.slice(0, 8).map(db => `<div class="m" title="${db} dBFS"><i style="height:${Math.max(0, (db + 60) / 60 * 100)}%"></i></div>`).join("");
+    const layers = Object.entries(c.layers).map(([ln, l]) => {
+      const t = l.fg.time || [0, 0];
+      return `<div>layer ${ln}: ${l.fg.producer || "-"} ${l.fg.name || ""} ${t[0].toFixed(2)} / ${t[1].toFixed(2)}s ${l.fg.paused ? "PAUSED" : ""} <span class="dim">bg: ${l.bg.producer || "-"}</span></div>`;
+    }).join("") || '<div class="dim">no layers</div>';
+    const outs = Object.values(c.outputs).map(o => `${o.consumer} ${o["decklink/index"] ?? ""}`).join(", ");
+    return `<div class="ch"><b>CH ${n}</b> ${c.format} <span class="dim">${outs}</span><div class="meters">${meters}</div>${layers}</div>`;
+  }).join("");
+}
+connect();
+</script>
+</body>
+</html>

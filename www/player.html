@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="chname" id="chname">PLAY</span>
+    <span class="route" id="route"></span>
+    <span class="conn">
+      <span><i class="dot" id="d-ws"></i>WS</span>
+      <span><i class="dot" id="d-amcp"></i>AMCP</span>
+      <span><i class="dot" id="d-osc"></i>OSC</span>
+      <button class="linkbtn" id="btn-browser" title="미디어 브라우저 창 열기">Media Browser</button>
+    </span>
+  </header>
+
+  <section class="panel info">
+    <div class="fname" id="fname">—</div>
+    <div class="state" id="state">empty</div>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <section class="panel transport">
+    <div class="grp">
+      <button class="tbtn danger" data-act="eject" title="Eject (clear layer)"><svg viewBox="0 0 24 24"><path d="M12 5l7 9H5zM5 16h14v3H5z"/></svg>EJECT</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="tbtn" data-act="top" title="Go to IN / top (Home)"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>TOP</button>
+      <button class="tbtn" data-step="-1s" title="-1 s (Shift+←, J)"><svg viewBox="0 0 24 24"><path d="M12 6v12L3 12zM21 6v12l-9-6z"/></svg>1s</button>
+      <button class="tbtn" data-step="-1" title="-1 frame (←)"><svg viewBox="0 0 24 24"><path d="M16 6v12L7 12z"/></svg>1f</button>
+      <button class="tbtn play" id="btn-play" data-act="toggle" title="Play / Pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg><span>PLAY</span></button>
+      <button class="tbtn" data-step="1" title="+1 frame (→)">1f<svg viewBox="0 0 24 24"><path d="M8 6v12l9-6z"/></svg></button>
+      <button class="tbtn" data-step="1s" title="+1 s (Shift+→, L when paused)">1s<svg viewBox="0 0 24 24"><path d="M3 6v12l9-6zM12 6v12l9-6z"/></svg></button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="tbtn in" data-act="mark_in" title="Mark IN (I)">IN</button>
+      <button class="tbtn out" data-act="mark_out" title="Mark OUT (O)">OUT</button>
+      <button class="tbtn" id="btn-goin" title="Go to IN (Ctrl+I)">→IN</button>
+      <button class="tbtn" id="btn-goout" title="Go to OUT (Ctrl+O)">→OUT</button>
+      <button class="tbtn" data-act="clear_marks" title="Clear IN/OUT">CLR</button>
+    </div>
+    <span class="sep"></span>
+    <label>Loop
+      <select id="loopmode" title="Loop play">
+        <option value="none">none</option>
+        <option value="single">single</option>
+        <option value="playlist" disabled title="단계 2">playlist</option>
+      </select>
+    </label>
+  </section>
+
+  <canvas class="tl panel" id="timeline"></canvas>
+  <div class="panel zoomtl" id="zoomtl">zoomed timeline (scene change / audio peak) — 단계 4</div>
+
+  <section class="panel tcrow">
+    <div class="tcbox"><span class="lbl">Timecode</span><span class="tc-main" id="tc">--:--:--:--</span></div>
+    <div class="tcbox"><span class="lbl">Elapsed</span><span class="v" id="tc-el">--</span></div>
+    <div class="tcbox rem" id="box-rem"><span class="lbl">Remaining</span><span class="v" id="tc-rem">--</span></div>
+    <div class="tcbox in"><span class="lbl">In</span><span class="v" id="tc-in">--</span></div>
+    <div class="tcbox out"><span class="lbl">Out · Duration</span><span class="v" id="tc-out">--</span></div>
+  </section>
+
+  <section class="panel"><canvas class="meter" id="meter"></canvas></section>
+
+  <section class="panel listwrap">
+    <div class="listhead">
+      <span class="title">Media</span><span class="dim">(임시 목록 — 더블클릭으로 LOAD. 단계 2에서 플레이리스트로 교체)</span>
+    </div>
+    <div class="list" id="medialist"></div>
+  </section>
+
+  <section class="panel">
+    <div class="status" id="status"><span class="dim mono" id="status-t"></span><span class="msg" id="status-msg">ready</span><span class="dim">log ▾</span></div>
+    <div class="logpane hidden" id="logpane"></div>
+  </section>
+</div>
+<script type="module" src="js/player.js"></script>
+</body>
+</html>

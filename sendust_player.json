@@ -1,0 +1,40 @@
+{
+  "title": "sendust playlist",
+  "http": { "host": "0.0.0.0", "port": 8300 },
+  "auth": false,
+  "password": "",
+  "ext_control": { "enabled": true, "key": "", "osc_port": 9250 },
+
+  "casparcg": {
+    "host": "127.0.0.1",
+    "amcp_port": 5250,
+    "osc_port": 6250,
+    "media_path": "/mnt/raid0",
+    "template_path": "/mnt/raid0/template",
+    "video_layer": 10,
+    "osd_route_layer": 10,
+    "osd_overlay_layer": 20
+  },
+
+  "browser": { "lower_root": "/mnt", "favorites": [] },
+  "shared_playlist_path": "/mnt/storage1",
+
+  "osd": {
+    "timecode": { "enabled": true, "mode": "elapsed", "x": 0.05, "y": 0.86, "size": 0.05 },
+    "filename": { "enabled": true, "x": 0.05, "y": 0.06, "size": 0.03 }
+  },
+
+  "zoom_timeline": { "seconds": 5 },
+
+  "sdi_preview": {
+    "rtsp_base": "rtsp://127.0.0.1:8554",
+    "webrtc_port": 8889,
+    "args": "-vf yadif=0:-1:0,scale=960:540 -c:v h264_nvenc -preset p1 -tune ull -bf 0 -g 30 -b:v 2M -an -f rtsp -rtsp_transport tcp"
+  },
+
+  "total_sdi_consumer": 3,
+  "channels": [
+    { "channel_index": 0, "name": "PLAY 1", "clean_out": 1, "osd_out": 2 },
+    { "channel_index": 1, "name": "PLAY 2", "clean_out": 3, "osd_out": null }
+  ]
+}
