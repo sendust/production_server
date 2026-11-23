@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist [VGA Preview]</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/preview.css">
+</head>
+<body>
+<div class="app pv">
+  <header class="top">
+    <span class="chname" id="pv-title">VGA Preview</span>
+    <span class="route" id="pv-target"></span>
+    <span class="conn">
+      <span class="dim mono" id="pv-stats"></span>
+      <label class="dim">Quality <select id="pv-quality" title="디코딩 해상도">
+        <option value="0">Full</option><option value="1" selected>Half</option><option value="2">Quarter</option></select></label>
+      <label class="dim">Field <select id="pv-field" title="인터레이스 표시">
+        <option value="-1">Weave</option><option value="0" selected>Bob top</option><option value="1">Bob bottom</option></select></label>
+    </span>
+  </header>
+
+  <div class="pv-main">
+    <div class="panel pv-video">
+      <canvas id="pv-canvas"></canvas>
+      <div class="pv-osd mono" id="pv-osd"></div>
+      <div class="pv-msg" id="pv-msg">loading…</div>
+    </div>
+    <div class="panel pv-side">
+      <div class="tcbox"><span class="lbl">Timecode</span><span class="tc-main" id="pv-tc">--:--:--:--</span></div>
+      <input class="pv-tcin mono" id="pv-tcin" placeholder="TC 또는 프레임 입력 + Enter" title="이동할 타임코드 / 프레임 번호">
+      <div class="pv-grid">
+        <div class="tcbox in"><span class="lbl">In</span><span class="v" id="pv-in">--</span></div>
+        <div class="tcbox out"><span class="lbl">Out</span><span class="v" id="pv-out">--</span></div>
+        <div class="tcbox"><span class="lbl">Duration</span><span class="v" id="pv-dur">--</span></div>
+        <div class="tcbox"><span class="lbl">Rate</span><span class="v" id="pv-rate">--</span></div>
+      </div>
+      <div class="pv-changed dim" id="pv-changed"></div>
+      <div class="lbl dim">Audio monitor (track → L / R / C / –)</div>
+      <div class="pv-tracks" id="pv-tracks"></div>
+      <canvas class="meter pv-meter" id="pv-meter"></canvas>
+      <label class="dim pv-vol">Volume <input type="range" id="pv-vol" min="0" max="1" step="0.01" value="0.8"></label>
+    </div>
+  </div>
+
+  <section class="panel transport">
+    <div class="grp">
+      <button class="tbtn" data-k="home" title="처음 (Home)">|◀</button>
+      <button class="tbtn" data-k="goin" title="IN 으로 (Ctrl+I)">→IN</button>
+      <button class="tbtn" data-k="j" title="역재생 / 빠르게 (J)">◀◀ J</button>
+      <button class="tbtn" data-k="-1" title="-1 frame (←)">◀ 1f</button>
+      <button class="tbtn play" id="pv-play" data-k="space" title="Play / Pause (Space, K)"><span>PLAY</span></button>
+      <button class="tbtn" data-k="+1" title="+1 frame (→)">1f ▶</button>
+      <button class="tbtn" data-k="l" title="재생 / 빠르게 (L)">L ▶▶</button>
+      <button class="tbtn" data-k="goout" title="OUT 으로 (Ctrl+O)">→OUT</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="tbtn in" data-k="i" title="Mark IN (I)">IN</button>
+      <button class="tbtn out" data-k="o" title="Mark OUT (O)">OUT</button>
+      <button class="tbtn" data-k="clear" title="IN/OUT 해제">CLR</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp">
+      <button class="tbtn apply" id="pv-apply" data-k="enter" title="IN/OUT 을 플레이리스트 항목에 적용 (Enter)">APPLY ⏎</button>
+      <button class="tbtn" id="pv-add" title="IN/OUT 으로 새 항목을 플레이리스트 (이 항목 다음) 에 추가">+ NEW ITEM</button>
+      <button class="tbtn" id="pv-revert" title="플레이리스트 항목의 IN/OUT 으로 되돌리기">REVERT</button>
+    </div>
+    <span class="spacer"></span>
+    <span class="dim keyhint">Space · J/K/L · ←/→ · Shift+←/→ 1s · I/O · Ctrl+I/O · Enter 적용 · / 장면 분석</span>
+  </section>
+
+  <canvas class="tl panel" id="timeline"></canvas>
+
+  <section class="panel zoom">
+    <div class="zoombar">
+      <button class="ibtn" id="sc-run" title="playhead 앞뒤 ±N초의 장면 전환 + 오디오 peak 분석 ( / )">✂ SCENE</button>
+      <label class="dim">± <input id="sc-range" type="number" min="1" max="30" step="1"> s</label>
+      <label class="dim">thr <input id="sc-th" type="range" min="0.05" max="1" step="0.01"> <span class="mono" id="sc-th-v"></span></label>
+      <label class="chk dim"><input type="checkbox" id="sc-auto"> auto</label>
+      <span class="dim mono" id="sc-info"></span>
+      <span class="spacer"></span>
+      <span class="dim keyhint">1-9 컷 · Shift+1-9 컷 직전 · Ctrl+←/→</span>
+      <button class="ibtn" id="sc-close" title="닫기">✕</button>
+    </div>
+    <div class="sc-box" id="sc-box">
+      <canvas id="sc-canvas"></canvas>
+      <div id="sc-head" hidden></div>
+      <div id="sc-hover" hidden></div>
+      <div id="sc-empty" class="dim">/ 키 또는 ✂ SCENE: playhead 주변 장면 전환과 오디오 peak</div>
+    </div>
+  </section>
+</div>
+<script type="module" src="js/preview.js"></script>
+</body>
+</html>

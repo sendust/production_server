@@ -77,7 +77,10 @@ export class PlaylistUI {
     const clips = pl.items.filter(i => i.type === "clip");
     const total = clips.reduce((a, it) => a + itemSec(it), 0);
     $("#pl-total").textContent = `${clips.length} clips · ${secTc(total)}`;
-    $("#pl-preview").disabled = true;
+    const one = this.previewItem();
+    const pb = $("#pl-preview");
+    pb.disabled = !one;
+    pb.title = one ? `VGA 프리뷰: ${one.name}` : "VGA 프리뷰: MXF 클립 하나를 선택하세요";
     this.renderLive();
   }
 
@@ -117,6 +120,17 @@ export class PlaylistUI {
     box.classList.remove("hidden");
     $("#tc-pl").textContent = `${nth}/${clips.length} · ${secTc(remain)}`;
     box.title = pl.enabled ? "현재 클립 번호/전체 · 다음 PAUSE 또는 끝까지 남은 시간" : "Playlist play OFF: 현재 클립만";
+  }
+
+  previewItem() {
+    const ids = this.selectedIds();
+    const it = ids.length === 1 ? this.pl.items.find(i => i.id === ids[0]) : null;
+    return it && it.type === "clip" && !it.missing && /\.mxf$/i.test(it.file) ? it : null;
+  }
+
+  openPreview() {
+    const it = this.previewItem();
+    if (it) window.open(`/preview.html?ch=${this.ch}&id=${it.id}`, `sendust_preview_${this.ch}`);
   }
 
   selectedIds() { return this.pl ? this.pl.items.filter(i => this.sel.has(i.id)).map(i => i.id) : []; }
@@ -231,6 +245,7 @@ export class PlaylistUI {
       else if (k === "Enter") this.cueSelected(false);
       else if (k === "Delete") $("#pl-del").click();
       else if (k === "p" && !e.ctrlKey) $("#pl-pause").click();
+      else if (k === "v" && !e.ctrlKey) this.openPreview();
       else if (k === "a" && e.ctrlKey) { this.sel = new Set(items.map(i => i.id)); this.render(); }
       else h = false;
       if (h) { e.preventDefault(); e.stopPropagation(); }
@@ -251,6 +266,7 @@ export class PlaylistUI {
       if (r?.missing) toast(`${r.missing} clip(s) missing on this host`);
     };
     $("#pl-cue").onclick = () => this.cueSelected(false);
+    $("#pl-preview").onclick = () => this.openPreview();
     $("#pl-pause").onclick = () => {
       const ids = this.selectedIds();
       const at = ids.length ? this.pl.items.findIndex(i => i.id === ids[0]) : this.pl.items.length;

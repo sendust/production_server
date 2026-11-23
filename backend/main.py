@@ -8,7 +8,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -503,6 +503,18 @@ async def ws_endpoint(ws: WebSocket):
         pass
     finally:
         hub.clients.discard(ws)
+
+
+@api.get("/media/{path:path}")
+async def media_file(path: str):
+    """Original media with HTTP Range support (VGA preview reads MXF GOPs with Range requests)."""
+    try:
+        p = app_state.media.abs(path)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not p.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(p, headers={"Cache-Control": "no-cache"})
 
 
 @api.get("/")
