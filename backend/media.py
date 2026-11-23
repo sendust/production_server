@@ -14,6 +14,7 @@ IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tga", ".tif", ".tiff", ".bmp", ".gif", "
 NOMINAL_FPS = (30000, 1001)
 
 CACHE_FILE = ROOT / "data" / "probe_cache.json"
+PROBE_VERSION = 2  # bump when _ffprobe() output changes (invalidates the cache)
 
 
 def kind_of(name: str) -> str | None:
@@ -78,7 +79,7 @@ class Media:
         st = p.stat()
         key = str(p)
         c = self._cache.get(key)
-        if c and c.get("_mtime") == int(st.st_mtime) and c.get("_size") == st.st_size:
+        if c and c.get("_mtime") == int(st.st_mtime) and c.get("_size") == st.st_size and c.get("_v") == PROBE_VERSION:
             return c
         if key in self._inflight:
             return await self._inflight[key]
@@ -86,7 +87,7 @@ class Media:
         self._inflight[key] = fut
         try:
             info = await asyncio.to_thread(_ffprobe, p)
-            info["_mtime"], info["_size"] = int(st.st_mtime), st.st_size
+            info["_mtime"], info["_size"], info["_v"] = int(st.st_mtime), st.st_size, PROBE_VERSION
             self._cache[key] = info
             self._save()
             fut.set_result(info)
@@ -150,6 +151,7 @@ def _ffprobe(p: Path) -> dict:
         "tc_start": tc or "00:00:00:00",
         "drop": bool(tc and ";" in tc) or (tc is None and fps == NOMINAL_FPS),
         "bitrate": int(fmt.get("bit_rate", 0) or 0),
+        "start_time": float(fmt.get("start_time") or 0.0),
         "video": None if not v or kind != "video" else {
             "codec": v.get("codec_name"), "profile": v.get("profile"), "width": v.get("width"), "height": v.get("height"),
             "pix_fmt": v.get("pix_fmt"), "field_order": v.get("field_order"),

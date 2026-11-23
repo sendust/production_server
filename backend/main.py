@@ -20,6 +20,7 @@ from .engine import Engine
 from .fsops import Conflict, FsError, Jobs, Roots
 from .media import Media
 from .osd import Osd
+from . import scenes as scenes_mod
 from .player import Player
 from .version import commit_stamp
 
@@ -202,6 +203,27 @@ async def media_probe(file: str):
     try:
         return await app_state.media.probe(file)
     except (ValueError, OSError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+
+
+class ScenesReq(BaseModel):
+    file: str
+    frame: int
+    before: float = 5
+    after: float = 5
+
+
+@api.post("/api/v1/media/scenes")
+async def media_scenes(b: ScenesReq):
+    """Scene score + audio peak per source frame around `frame` (see scenes.py)."""
+    try:
+        info = await app_state.media.probe(b.file)
+        t0 = time.monotonic()
+        r = await scenes_mod.analyse(app_state.media.abs(b.file), info, b.frame, b.before, b.after)
+        r["file"] = b.file
+        r["elapsed"] = round(time.monotonic() - t0, 2)
+        return r
+    except (ValueError, OSError, RuntimeError, scenes_mod.SceneError) as e:
         raise HTTPException(400, str(e))
 
 

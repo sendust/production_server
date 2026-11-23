@@ -57,14 +57,32 @@
   </section>
 
   <canvas class="tl panel" id="timeline"></canvas>
-  <div class="panel zoomtl" id="zoomtl">zoomed timeline (scene change / audio peak) — 단계 4</div>
+  <section class="panel zoom">
+    <div class="zoombar">
+      <button class="ibtn" id="sc-run" title="playhead 앞뒤 ±N초의 장면 전환 + 오디오 peak 분석 ( / )">✂ SCENE</button>
+      <label class="dim">± <input id="sc-range" type="number" min="1" max="30" step="1" title="분석 범위 (초, 앞뒤 각각)"> s</label>
+      <label class="dim" title="컷으로 볼 scene 점수">thr <input id="sc-th" type="range" min="0.05" max="1" step="0.01"> <span class="mono" id="sc-th-v"></span></label>
+      <label class="chk dim" title="일시정지 위치가 분석 구간 밖이면 자동으로 다시 분석"><input type="checkbox" id="sc-auto"> auto</label>
+      <span class="dim mono" id="sc-info"></span>
+      <span class="spacer"></span>
+      <span class="dim keyhint">1-9 컷 · Shift+1-9 컷 직전 · Ctrl+←/→ 이전/다음 컷</span>
+      <button class="ibtn" id="sc-close" title="닫기">✕</button>
+    </div>
+    <div class="sc-box" id="sc-box">
+      <canvas id="sc-canvas"></canvas>
+      <div id="sc-head" hidden></div>
+      <div id="sc-hover" hidden></div>
+      <div id="sc-empty" class="dim">/ 키 또는 ✂ SCENE: playhead 주변 장면 전환과 오디오 peak 를 프레임 단위로 표시</div>
+    </div>
+  </section>
 
   <section class="panel tcrow">
     <div class="tcbox"><span class="lbl">Timecode</span><span class="tc-main" id="tc">--:--:--:--</span></div>
     <div class="tcbox"><span class="lbl">Elapsed</span><span class="v" id="tc-el">--</span></div>
     <div class="tcbox rem" id="box-rem"><span class="lbl">Remaining</span><span class="v" id="tc-rem">--</span></div>
     <div class="tcbox in"><span class="lbl">In</span><span class="v" id="tc-in">--</span></div>
-    <div class="tcbox out"><span class="lbl">Out · Duration</span><span class="v" id="tc-out">--</span></div>
+    <div class="tcbox out"><span class="lbl">Out</span><span class="v" id="tc-out">--</span></div>
+    <div class="tcbox"><span class="lbl">Duration</span><span class="v" id="tc-dur">--</span></div>
     <div class="tcbox plinfo hidden" id="box-pl"><span class="lbl">Playlist</span><span class="v" id="tc-pl">--</span></div>
   </section>
 

@@ -8,7 +8,7 @@ export class Timeline {
   constructor(canvas, { onScrub, onScrubStart } = {}) {
     this.c = canvas;
     this.ctx = canvas.getContext("2d");
-    this.s = { length: 0, fin: 0, fout: 0, pos: null, tcStart: 0, fps: [30000, 1001], drop: true, zoomSec: 5 };
+    this.s = { length: 0, fin: 0, fout: 0, pos: null, tcStart: 0, fps: [30000, 1001], drop: true, zoomSec: 5, span: null, cuts: [] };
     this.onScrub = onScrub;
     this.onScrubStart = onScrubStart;
     this.dragging = false;
@@ -101,12 +101,18 @@ export class Timeline {
       for (let sec = 0; sec * fpsR <= s.length; sec += minor) ctx.fillRect(this.x(sec * fpsR), trackY - 3, 1, 3);
     }
 
-    // zoom window around playhead
+    // analysed span of the zoomed timeline + its cuts
+    if (s.span) {
+      const a = this.x(s.span[0]), b = Math.max(a + 3, this.x(s.span[1] + 1));
+      ctx.fillStyle = css("--tl-zoom");
+      ctx.fillRect(a, trackY + trackH - 6, b - a, 6);
+      ctx.fillStyle = "#ff4fa3";
+      for (const k of s.cuts || []) ctx.fillRect(Math.round(this.x(k)), trackY, 1, trackH - 6);
+    }
+    // zoom window around playhead (what "/" would analyse)
     if (s.pos != null && s.zoomSec > 0) {
       const zf = s.zoomSec * fpsR;
       const a = this.x(Math.max(0, s.pos - zf)), b = this.x(Math.min(s.length, s.pos + zf));
-      ctx.fillStyle = css("--tl-zoom");
-      ctx.fillRect(a, trackY + trackH - 6, Math.max(2, b - a), 6);
       ctx.strokeStyle = css("--tl-zoom-line");
       ctx.lineWidth = 1;
       ctx.strokeRect(a + 0.5, trackY + 0.5, Math.max(2, b - a) - 1, trackH - 1);

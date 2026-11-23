@@ -1,6 +1,7 @@
 // Playback control window: one page per playback channel (?ch=<channel_index>).
 import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, fmtBytes, esc, toast } from "./common.js";
 import { PlaylistUI } from "./playlist_ui.js";
+import { Scenes } from "./scenes.js";
 import { Timeline } from "./timeline.js";
 import { Meter } from "./meter.js";
 
@@ -47,6 +48,17 @@ const timeline = new Timeline($("#timeline"), {
 });
 const meter = new Meter($("#meter"));
 const plui = new PlaylistUI(CH, { getPlayer: () => S.p });
+let scenes = null;   // created after hello (needs zoom_timeline defaults)
+function makeScenes() {
+  scenes = new Scenes({
+    loaded: () => loaded(),
+    pos: () => { const f = livePos(); return f == null ? null : Math.floor(f); },
+    status: () => S.p?.status,
+    seek: f => { if (S.p) { S.p.pos = f; S.recvAt = performance.now(); } cmd("seek", { frame: f }); },
+    pause: () => { if (S.p?.status === "playing") cmd("pause"); },
+    focus: () => document.body.focus({ preventScroll: true }),
+  }, S.info?.zoom_timeline ?? {});
+}
 
 let scrubBusy = false, scrubPending = null;
 async function scrubTo(f, final) {
@@ -117,15 +129,19 @@ function renderLive() {
     $("#tc-rem").textContent = durTc(rem, i);
     $("#box-rem").classList.toggle("alert", p.status === "playing" && rem < fpsR() * 10);
     $("#tc-in").textContent = framesToTc(ts + l.in, i.fps, i.drop);
-    $("#tc-out").textContent = `${framesToTc(ts + l.out, i.fps, i.drop)} · ${durTc(l.out - l.in, i)}`;
+    $("#tc-out").textContent = framesToTc(ts + l.out, i.fps, i.drop);
+    $("#tc-dur").textContent = durTc(l.out - l.in, i);
   } else {
-    for (const id of ["#tc-el", "#tc-rem", "#tc-in", "#tc-out"]) $(id).textContent = "--";
+    for (const id of ["#tc-el", "#tc-rem", "#tc-in", "#tc-out", "#tc-dur"]) $(id).textContent = "--";
     $("#tc").textContent = "--:--:--:--";
   }
+  const sd = scenes?.data;
   timeline.set(l && l.info.kind !== "image" ? {
     length: l.info.frames, fin: l.in, fout: l.out, pos, tcStart: tcStart(),
-    fps: l.info.fps, drop: l.info.drop, zoomSec: S.info?.zoom_timeline?.seconds ?? 5,
+    fps: l.info.fps, drop: l.info.drop, zoomSec: scenes ? scenes.sideSec() : (S.info?.zoom_timeline?.seconds ?? 5),
+    span: sd ? [sd.from, sd.to] : null, cuts: sd ? scenes.cuts() : [],
   } : { length: 0, pos: null });
+  scenes?.render();
   requestAnimationFrame(renderLive);
 }
 
@@ -164,6 +180,7 @@ connectWs(m => {
     S.logs = [];
     (m.logs?.[CH] ?? []).forEach(addLog);
     if (m.playlists?.[CH]) plui.set(m.playlists[CH]);
+    if (!scenes) makeScenes();
   }
   if (m.type === "playlist" && m.ch === CH) plui.set(m.playlist);
   if (m.type === "hello" || m.type === "tick") {
@@ -187,11 +204,16 @@ $("#loopmode").onchange = e => cmd("loop", { mode: e.target.value });
 $("#btn-browser").onclick = () => window.open("/browser.html", "sendust_browser");
 
 document.addEventListener("keydown", e => {
-  if (e.target.closest?.("input, select, textarea")) return;
+  if (e.target.closest?.("input:not([type=range]):not([type=checkbox]), select, textarea, dialog")) return;
   const k = e.key.toLowerCase();
   const sec = Math.round(fpsR());
   let handled = true;
-  if (k === " ") cmd("toggle");
+  // zoomed timeline: "/" analyse, 1-9 cut, Shift+1-9 frame before cut, Ctrl+←/→ prev/next cut (e.code: IME-safe)
+  const digit = !e.ctrlKey && !e.altKey && /^(Digit|Numpad)([1-9])$/.exec(e.code);
+  if ((e.code === "Slash" && !e.shiftKey) || e.code === "NumpadDivide") { if (!e.repeat) scenes?.run(); }
+  else if (digit && scenes?.data) scenes.jump(Number(digit[2]), e.shiftKey ? -1 : 0);
+  else if (e.ctrlKey && scenes?.data && (e.code === "ArrowLeft" || e.code === "ArrowRight")) scenes.step(e.code === "ArrowRight" ? 1 : -1);
+  else if (k === " ") cmd("toggle");
   else if (k === "arrowleft") cmd("step", { delta: e.shiftKey ? -sec : -1 });
   else if (k === "arrowright") cmd("step", { delta: e.shiftKey ? sec : 1 });
   else if (k === "j") cmd("step", { delta: -sec });
