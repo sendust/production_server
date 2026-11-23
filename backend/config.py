@@ -29,6 +29,7 @@ DEFAULTS = {
         "filename": {"enabled": True, "x": 0.05, "y": 0.06, "size": 0.03},
     },
     "zoom_timeline": {"seconds": 5},
+    "playlist": {"image_sec": 10},
     "sdi_preview": {"rtsp_base": "rtsp://127.0.0.1:8554", "webrtc_port": 8889, "args": ""},
     "total_sdi_consumer": 0,
     "channels": [],

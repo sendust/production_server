@@ -9,7 +9,12 @@ export async function api(path, body) {
   };
   const r = await fetch(`/api/v1/${path}`, opt);
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.detail || r.statusText);
+  if (!r.ok) {
+    const d = j.detail;
+    const e = new Error(typeof d === "string" ? d : d?.message || r.statusText);
+    e.status = r.status; e.detail = d;
+    throw e;
+  }
   return j;
 }
 
@@ -72,3 +77,35 @@ export function fmtBytes(n) {
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+// ---- modal dialogs (confirm / prompt) -------------------------------------
+// ask({title, message, list, input, ok, danger}) -> Promise<string|true|null>
+export function ask({ title = "", message = "", list = null, input = null, ok = "OK", danger = false } = {}) {
+  return new Promise(resolve => {
+    const d = document.createElement("dialog");
+    d.innerHTML = `<h3 style="margin:0 0 8px;font-size:15px">${esc(title)}</h3>
+      <div>${esc(message)}</div>
+      ${list ? `<ul>${list.slice(0, 50).map(x => `<li>${esc(x)}</li>`).join("")}${list.length > 50 ? `<li>… +${list.length - 50}</li>` : ""}</ul>` : ""}
+      ${input !== null ? `<input type="text" value="${esc(input)}">` : ""}
+      <div class="row"><button class="ibtn" data-r="0">Cancel</button><button class="ibtn ${danger ? "danger" : ""}" data-r="1">${esc(ok)}</button></div>`;
+    document.body.append(d);
+    const inp = d.querySelector("input");
+    const done = v => { d.close(); d.remove(); resolve(v); };
+    d.querySelector("[data-r='0']").onclick = () => done(null);
+    d.querySelector("[data-r='1']").onclick = () => done(inp ? inp.value : true);
+    d.addEventListener("cancel", e => { e.preventDefault(); done(null); });
+    d.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); done(inp ? inp.value : true); } });
+    d.showModal();
+    if (inp) { inp.focus(); const dot = inp.value.lastIndexOf("."); inp.setSelectionRange(0, dot > 0 ? dot : inp.value.length); }
+    else d.querySelector("[data-r='1']").focus();
+  });
+}
+
+export function toast(msg, ms = 3500) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.append(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+export const DND_MEDIA = "application/x-sendust-media";   // {root, paths[]}

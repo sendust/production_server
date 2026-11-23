@@ -1,5 +1,6 @@
 // Playback control window: one page per playback channel (?ch=<channel_index>).
-import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, fmtBytes, esc } from "./common.js";
+import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, fmtBytes, esc, toast } from "./common.js";
+import { PlaylistUI } from "./playlist_ui.js";
 import { Timeline } from "./timeline.js";
 import { Meter } from "./meter.js";
 
@@ -13,13 +14,6 @@ const S = {
 };
 
 // ---------------------------------------------------------------- helpers
-function toast(msg) {
-  const t = document.createElement("div");
-  t.className = "toast"; t.textContent = msg;
-  document.body.append(t);
-  setTimeout(() => t.remove(), 3500);
-}
-
 async function cmd(action, body) {
   try {
     const r = await api(`ch/${CH}/${action}`, body ?? {});
@@ -52,6 +46,7 @@ const timeline = new Timeline($("#timeline"), {
   onScrub: (f, final) => scrubTo(f, final),
 });
 const meter = new Meter($("#meter"));
+const plui = new PlaylistUI(CH, { getPlayer: () => S.p });
 
 let scrubBusy = false, scrubPending = null;
 async function scrubTo(f, final) {
@@ -132,10 +127,12 @@ function renderLive() {
 
 function applyPlayer(p) {
   const prevKey = JSON.stringify([S.p?.status, S.p?.loaded, S.p?.loop_mode, S.p?.decklink, S.p?.osd_decklink]);
+  const prevPre = S.p?.preloaded;
   const vol = p.volume;
   S.p = p; S.recvAt = performance.now();
   if (vol?.length) meter.push(vol);
   if (JSON.stringify([p.status, p.loaded, p.loop_mode, p.decklink, p.osd_decklink]) !== prevKey) renderStatic();
+  if (p.preloaded !== prevPre) plui.render(); else plui.renderLive();
 }
 
 // ---------------------------------------------------------------- logs
@@ -162,7 +159,9 @@ connectWs(m => {
     $("#logpane").innerHTML = "";
     S.logs = [];
     (m.logs?.[CH] ?? []).forEach(addLog);
+    if (m.playlists?.[CH]) plui.set(m.playlists[CH]);
   }
+  if (m.type === "playlist" && m.ch === CH) plui.set(m.playlist);
   if (m.type === "hello" || m.type === "tick") {
     S.engine = m.engine;
     dot("#d-amcp", m.amcp); dot("#d-osc", m.engine?.osc_alive);
@@ -203,35 +202,5 @@ document.addEventListener("keydown", e => {
   if (handled) e.preventDefault();
 });
 
-// ---------------------------------------------------------------- temporary media list (replaced by playlist in phase 2)
-let mediaDir = "";
-async function loadMedia(dir = "") {
-  try {
-    const r = await api(`media/list?dir=${encodeURIComponent(dir)}`);
-    mediaDir = dir;
-    const rows = [];
-    if (dir) rows.push(`<tr data-dir="${esc(dir.split("/").slice(0, -1).join("/"))}"><td colspan="4">..</td></tr>`);
-    for (const it of r.items) {
-      rows.push(it.dir
-        ? `<tr data-dir="${esc(it.path)}"><td><b>▸ ${esc(it.name)}/</b></td><td></td><td></td><td></td></tr>`
-        : `<tr data-file="${esc(it.path)}"><td>${esc(it.name)}</td><td class="dim">${it.kind}</td><td class="num">${fmtBytes(it.size)}</td><td class="num">${new Date(it.mtime * 1000).toLocaleString("ko-KR", { hour12: false })}</td></tr>`);
-    }
-    $("#medialist").innerHTML = `<table><thead><tr><th>Name</th><th>Kind</th><th>Size</th><th>Modified</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
-  } catch (e) { toast(`media list: ${e.message}`); }
-}
-$("#medialist").addEventListener("click", e => {
-  const tr = e.target.closest("tr[data-file],tr[data-dir]");
-  if (!tr) return;
-  $$("#medialist tr.sel").forEach(x => x.classList.remove("sel"));
-  tr.classList.add("sel");
-});
-$("#medialist").addEventListener("dblclick", e => {
-  const tr = e.target.closest("tr");
-  if (!tr) return;
-  if (tr.dataset.dir !== undefined) loadMedia(tr.dataset.dir);
-  else if (tr.dataset.file) cmd("load", { file: tr.dataset.file });
-});
-
-loadMedia();
 renderStatic();
 requestAnimationFrame(renderLive);

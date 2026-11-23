@@ -13,6 +13,7 @@ import math
 import time
 
 STALE = 0.5
+KEY_STALE = 0.25  # OSC repeats every key each channel frame (~60/s)
 FULL_SCALE = 2 ** 31
 
 
@@ -39,7 +40,7 @@ class Engine:
     def _layer(self, ch: dict, n: int) -> dict:
         ly = ch["layers"].get(n)
         if ly is None:
-            ly = ch["layers"][n] = {"fg": {}, "bg": {}, "seen": 0}
+            ly = ch["layers"][n] = {"fg": {}, "bg": {}, "fg_t": {}, "bg_t": {}, "seen": 0}
         return ly
 
     def on_osc(self, addr: str, args: list, _src=None):
@@ -79,6 +80,7 @@ class Engine:
             if sub.startswith("file/"):
                 sub = sub[5:]
             ly[side][sub] = args[0] if len(args) == 1 else args
+            ly[side + "_t"][sub] = now
 
     def take_peaks(self) -> dict[int, list[float]]:
         """dBFS peaks since the previous call (called once per UI tick)."""
@@ -97,16 +99,30 @@ class Engine:
                 if now - ly["seen"] > STALE:
                     del ch["layers"][ln]
                     continue
-                layers[ln] = {"fg": ly["fg"], "bg": ly["bg"]}
+                layers[ln] = {"fg": self._fresh(ly, "fg", now), "bg": self._fresh(ly, "bg", now)}
             out[n] = {
                 "format": ch["format"], "fps": ch["fps"], "volume": [dbfs(v) for v in ch["volume"]],
                 "layers": layers, "outputs": ch["outputs"], "alive": now - ch["seen"] < 2,
             }
         return {"channels": out, "osc_alive": now - self.osc_last < 2, "osc_rate": self.osc_rate}
 
-    def layer_fg(self, channel: int, layer: int) -> dict:
+    @staticmethod
+    def _fresh(ly: dict, side: str, now: float) -> dict:
+        """Keys not refreshed recently belong to a previous producer (e.g. file/time after a
+        switch to an image) and are dropped."""
+        ts = ly[side + "_t"]
+        for k in [k for k, t in ts.items() if now - t > KEY_STALE]:
+            ts.pop(k, None)
+            ly[side].pop(k, None)
+        return ly[side]
+
+    def layer(self, channel: int, layer: int) -> tuple[dict, dict]:
         ch = self.channels.get(channel)
         ly = ch and ch["layers"].get(layer)
-        if not ly or time.monotonic() - ly["seen"] > STALE:
-            return {}
-        return ly["fg"]
+        now = time.monotonic()
+        if not ly or now - ly["seen"] > STALE:
+            return {}, {}
+        return self._fresh(ly, "fg", now), self._fresh(ly, "bg", now)
+
+    def layer_fg(self, channel: int, layer: int) -> dict:
+        return self.layer(channel, layer)[0]

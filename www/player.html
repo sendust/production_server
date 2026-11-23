@@ -51,7 +51,7 @@
       <select id="loopmode" title="Loop play">
         <option value="none">none</option>
         <option value="single">single</option>
-        <option value="playlist" disabled title="단계 2">playlist</option>
+        <option value="playlist">playlist</option>
       </select>
     </label>
   </section>
@@ -65,15 +65,34 @@
     <div class="tcbox rem" id="box-rem"><span class="lbl">Remaining</span><span class="v" id="tc-rem">--</span></div>
     <div class="tcbox in"><span class="lbl">In</span><span class="v" id="tc-in">--</span></div>
     <div class="tcbox out"><span class="lbl">Out · Duration</span><span class="v" id="tc-out">--</span></div>
+    <div class="tcbox plinfo hidden" id="box-pl"><span class="lbl">Playlist</span><span class="v" id="tc-pl">--</span></div>
   </section>
 
   <section class="panel"><canvas class="meter" id="meter"></canvas></section>
 
-  <section class="panel listwrap">
-    <div class="listhead">
-      <span class="title">Media</span><span class="dim">(임시 목록 — 더블클릭으로 LOAD. 단계 2에서 플레이리스트로 교체)</span>
+  <section class="panel listwrap" id="plwrap">
+    <div class="listhead pltools">
+      <label class="chk" title="플레이리스트 연속 재생"><input type="checkbox" id="pl-enable"> Playlist play</label>
+      <span class="sep"></span>
+      <select id="pl-slot" title="플레이리스트 슬롯 (1~9: 이 서버, A~D: 공유)"></select>
+      <button class="ibtn" id="pl-save" title="선택한 슬롯에 저장">SAVE</button>
+      <button class="ibtn" id="pl-load" title="선택한 슬롯에서 불러오기">LOAD</button>
+      <span class="sep"></span>
+      <button class="ibtn" id="pl-cue" title="선택한 클립을 CasparCG 에 로드 (Enter / 더블클릭)">CUE ▸</button>
+      <button class="ibtn" id="pl-pause" title="선택 위치 앞에 PAUSE 라인 삽입 (P)">+ PAUSE</button>
+      <button class="ibtn" id="pl-preview" title="VGA 프리뷰 (단계 5)" disabled>PREVIEW</button>
+      <button class="ibtn danger" id="pl-del" title="선택 항목 삭제 (Del)">DEL</button>
+      <button class="ibtn danger" id="pl-clear" title="전체 삭제">CLEAR</button>
+      <span class="spacer"></span>
+      <span class="dim mono" id="pl-total"></span>
     </div>
-    <div class="list" id="medialist"></div>
+    <div class="list pl" id="pl" tabindex="0">
+      <table>
+        <thead><tr><th class="c-n">#</th><th>Name</th><th>Kind</th><th class="r">In</th><th class="r">Out</th><th class="r">Duration</th><th class="r" title="예상 송출 시각 (Playlist play 중)">On-air</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="pl-empty dim">미디어 브라우저에서 파일을 끌어다 놓으세요</div>
+    </div>
   </section>
 
   <section class="panel">

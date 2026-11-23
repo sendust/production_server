@@ -9,7 +9,7 @@ from pathlib import Path
 from .config import ROOT
 
 VIDEO_EXT = {".mxf", ".mov", ".mp4", ".m4v", ".mkv", ".ts", ".m2ts", ".mts", ".avi", ".mpg", ".mpeg", ".webm", ".wmv", ".flv", ".dv", ".gxf"}
-AUDIO_EXT = {".wav", ".mp3", ".aac", ".m4a", ".flac", ".ogg", ".opus", ".aif", ".aiff", ".wma"}
+AUDIO_EXT = {".wav", ".mp2", ".m2a", ".ac3", ".mp3", ".aac", ".m4a", ".flac", ".ogg", ".opus", ".aif", ".aiff", ".wma"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tga", ".tif", ".tiff", ".bmp", ".gif", ".webp", ".exr"}
 NOMINAL_FPS = (30000, 1001)
 

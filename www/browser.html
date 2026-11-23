@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist [Media Browser]</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/browser.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <span class="chname">Media Browser</span>
+    <span class="route" id="players"></span>
+    <span class="conn">
+      <span><i class="dot" id="d-ws"></i>WS</span>
+      <span><i class="dot" id="d-amcp"></i>AMCP</span>
+    </span>
+  </header>
+
+  <div class="panes">
+    <section class="panel pane" id="pane-media" data-root="media"></section>
+    <section class="panel pane" id="pane-host" data-root="host"></section>
+  </div>
+
+  <section class="panel jobs hidden" id="jobs"></section>
+
+  <footer class="panel keys dim">
+    <span><b>Tab</b> 판넬 전환</span><span><b>Enter</b> 열기</span><span><b>Backspace</b> 상위</span>
+    <span><b>F2</b> 이름변경</span><span><b>F5</b> 복사</span><span><b>F6</b> 이동</span><span><b>F7</b> 새 폴더</span>
+    <span><b>F8/Del</b> 삭제</span><span><b>Ctrl+A</b> 전체선택</span>
+    <span>파일을 플레이어 창의 플레이리스트로 드래그 · PC 파일을 판넬에 드롭하면 업로드</span>
+  </footer>
+</div>
+
+<template id="pane-tpl">
+  <div class="pane-head">
+    <span class="rootlabel"></span>
+    <span class="crumbs mono"></span>
+    <span class="spacer"></span>
+    <select class="favs" title="즐겨찾기"><option value="">★ 즐겨찾기</option></select>
+    <button class="ibtn" data-op="fav" title="현재 폴더를 즐겨찾기에 추가/삭제">☆</button>
+  </div>
+  <div class="pane-tools">
+    <button class="ibtn" data-op="up" title="상위 폴더 (Backspace)">↑</button>
+    <button class="ibtn" data-op="refresh" title="새로고침">⟳</button>
+    <span class="sep"></span>
+    <button class="ibtn" data-op="mkdir" title="새 폴더 (F7)">+ 폴더</button>
+    <button class="ibtn" data-op="rename" title="이름 변경 (F2)">이름</button>
+    <button class="ibtn" data-op="copy" title="반대편 판넬로 복사 (F5)">복사 ⇅</button>
+    <button class="ibtn" data-op="move" title="반대편 판넬로 이동 (F6)">이동 ⇅</button>
+    <button class="ibtn danger" data-op="delete" title="삭제 (F8 / Del)">삭제</button>
+    <span class="sep"></span>
+    <span class="sendto"></span>
+    <span class="spacer"></span>
+    <input class="filter" type="search" placeholder="filter" title="이름 필터">
+    <span class="count dim mono"></span>
+  </div>
+  <div class="list fl" tabindex="0">
+    <table>
+      <thead><tr>
+        <th data-sort="name">Name</th><th data-sort="kind">Kind</th><th data-sort="dur" class="durcol">Duration</th>
+        <th data-sort="size" class="r">Size</th><th data-sort="mtime" class="r">Modified</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="dropmask">PC 파일을 놓으면 이 폴더로 업로드</div>
+</template>
+
+<script type="module" src="js/browser.js"></script>
+</body>
+</html>
