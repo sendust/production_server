@@ -25,7 +25,10 @@ DEFAULTS = {
     "browser": {"lower_root": "/mnt", "favorites": []},
     "shared_playlist_path": "/mnt/storage1",
     "osd": {
-        "timecode": {"enabled": True, "mode": "elapsed", "x": 0.05, "y": 0.86, "size": 0.05},
+        "enabled": True,
+        "offset_frames": 1,   # added to the displayed TC while playing; 1 measured on nagoya1 (overlay is 1 frame late)
+        "box": True,          # semi-transparent background behind texts
+        "timecode": {"enabled": True, "mode": "elapsed", "label": True, "x": 0.05, "y": 0.86, "size": 0.05},
         "filename": {"enabled": True, "x": 0.05, "y": 0.06, "size": 0.03},
     },
     "zoom_timeline": {"seconds": 5},

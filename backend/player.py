@@ -117,6 +117,13 @@ class Player:
             return min(self.loaded["out"] - 1, int(sec * self._src_fps()))
         return None
 
+    def pos_age(self) -> float:
+        """How old position() is: time since CasparCG last reported file/time (0 for images)."""
+        if self._is_image():
+            return 0.0
+        a = self.engine.key_age(self.clean, self.layer, "time")
+        return round(a, 4) if a is not None else 0.0
+
     def _img_run(self, running: bool, reset: bool = False):
         acc, since = self._img_clock
         now = time.monotonic()
@@ -150,6 +157,7 @@ class Player:
             decklink=decklinks, osd_decklink=osd_dl,
             loaded=self.loaded, status=self.status(), pos=self.position(),
             loop=bool(fg.get("loop")), paused=bool(fg.get("paused")), loop_mode=self.loop_mode,
+            age=self.pos_age(),
             preloaded=self.preloaded["item_id"] if self.preloaded else None,
             t=time.time(),
         )

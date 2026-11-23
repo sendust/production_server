@@ -19,6 +19,7 @@ from .config import ROOT
 from .engine import Engine
 from .fsops import Conflict, FsError, Jobs, Roots
 from .media import Media
+from .osd import Osd
 from .player import Player
 from .version import commit_stamp
 
@@ -82,6 +83,7 @@ class App:
         self.players = [Player(ch, c["video_layer"], self.amcp, self.engine, self.media, self.hub.broadcast,
                                self.cfg["shared_playlist_path"], self.cfg["playlist"]["image_sec"])
                         for ch in self.cfg["channels"]]
+        self.osd = Osd(self.cfg, self.amcp, self.engine, self.players, self.cfg["http"]["port"])
         self.favorites = JsonStore(DATA / "favorites.json", list(self.cfg["browser"].get("favorites", [])))
         self.sessions = JsonStore(DATA / "sessions.json", {})
         self.osc_transport = None
@@ -109,9 +111,19 @@ class App:
         self.osc_transport = await osc.listen(self.cfg["casparcg"]["osc_port"], self.engine.on_osc)
         self.amcp.start()
         self._ticker = asyncio.create_task(self._tick())
+        self._osd_task = asyncio.create_task(self._osd_loop())
+
+    async def _osd_loop(self):
+        while True:
+            await asyncio.sleep(1)
+            try:
+                await self.osd.ensure()
+            except Exception as e:  # keep the loop alive whatever happens
+                log.warning("osd ensure: %s", e)
 
     async def stop(self):
         self._ticker.cancel()
+        self._osd_task.cancel()
         await self.amcp.stop()
         if self.osc_transport:
             self.osc_transport.close()
@@ -132,6 +144,7 @@ class App:
         for p in self.players:
             s = p.snapshot()
             s["volume"] = peaks.get(p.clean, [])
+            s["osd_state"] = self.osd.state(p)
             players.append(s)
         return {"type": "tick", "engine": self.engine.snapshot(), "amcp": self.amcp.connected, "players": players}
 
@@ -196,7 +209,9 @@ async def media_probe(file: str):
 @api.get("/api/v1/ch/{idx}")
 async def ch_state(idx: int):
     p = app_state.player(idx)
-    return {"player": p.snapshot(), "playlist": p.pl.view(), "logs": list(p.logs)}
+    snap = p.snapshot()
+    snap["osd_state"] = app_state.osd.state(p)
+    return {"player": snap, "playlist": p.pl.view(), "logs": list(p.logs)}
 
 
 class ChCmd(BaseModel):
@@ -402,6 +417,51 @@ async def session_set(request: Request):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------- OSD overlay
+def osd_payload(p: Player) -> dict:
+    ld = p.loaded
+    d = {"status": p.status(), "pos": p.position(), "age": p.pos_age()}
+    if ld:
+        i = ld["info"]
+        d.update(name=ld["name"], file=ld["file"], kind=i["kind"], fps=i["fps"], drop=i["drop"],
+                 tc_start=i["tc_start"], fin=ld["in"], fout=ld["out"], loop=p.loop_mode == "single")
+    return d
+
+
+@api.websocket("/ws/osd")
+async def ws_osd(ws: WebSocket, ch: int = 0):
+    """Light feed for the CasparCG HTML overlay: config once, then player position at 25 Hz."""
+    await ws.accept()
+    try:
+        p = app_state.player(ch)
+    except HTTPException:
+        await ws.close()
+        return
+    try:
+        await ws.send_json({"type": "cfg", "osd": app_state.cfg["osd"], "name": p.name})
+        last = None
+        while True:
+            d = osd_payload(p)
+            key = (d["status"], d["pos"], d.get("file"), d.get("fin"), d.get("fout"))
+            if key != last:
+                last = key
+                await ws.send_json({"type": "pos", **d})
+            await asyncio.sleep(0.04)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+
+
+@api.post("/api/v1/osd/reload")
+async def osd_reload():
+    """Re-read the osd section of sendust_player.json and reload the overlay pages."""
+    try:
+        app_state.cfg["osd"] = config_mod.load()["osd"]
+    except (OSError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    await app_state.osd.reload_overlays()
+    return {"ok": True, "osd": app_state.cfg["osd"]}
+
+
 # ---------------------------------------------------------------- websocket
 @api.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
@@ -433,7 +493,7 @@ api.mount("/", StaticFiles(directory=ROOT / "www", html=True), name="www")
 
 def main():
     h = app_state.cfg["http"]
-    uvicorn.run(api, host=h["host"], port=h["port"], log_level="warning")
+    uvicorn.run(api, host=h["host"], port=h["port"], log_level="warning", timeout_graceful_shutdown=2)
 
 
 if __name__ == "__main__":

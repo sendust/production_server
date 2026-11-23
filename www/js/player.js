@@ -62,6 +62,10 @@ async function scrubTo(f, final) {
   scrubBusy = false;
 }
 
+const osdCls = s => !s?.configured ? "" : !s.enabled ? "off" : s.route && s.overlay ? "ok" : "bad";
+const osdTitle = s => !s?.configured ? "" : !s.enabled ? "OSD disabled in config" :
+  `route ${s.route ? "OK" : "missing"} · overlay ${s.overlay ? "OK" : "missing"}`;
+
 function renderStatic() {
   const p = S.p, l = p?.loaded;
   const title = `${S.info?.title ?? "sendust playlist"} [${p?.name ?? `CH ${CH}`}] {${S.info?.stamp ?? ""}}`;
@@ -70,7 +74,7 @@ function renderStatic() {
   const dl = a => a?.length ? `DeckLink ${a.join(",")}` : "—";
   $("#route").innerHTML = p ? [
     `<span class="tag">CLEAN <b>CH${p.clean}-${p.layer}</b> → ${dl(p.decklink)}</span>`,
-    p.osd ? `<span class="tag">OSD <b>CH${p.osd}</b> → ${dl(p.osd_decklink)}</span>` : "",
+    p.osd ? `<span class="tag ${osdCls(p.osd_state)}" title="${osdTitle(p.osd_state)}">OSD <b>CH${p.osd}</b> → ${dl(p.osd_decklink)}</span>` : "",
   ].join("") : "";
 
   const st = p?.status ?? "empty";
@@ -126,12 +130,12 @@ function renderLive() {
 }
 
 function applyPlayer(p) {
-  const prevKey = JSON.stringify([S.p?.status, S.p?.loaded, S.p?.loop_mode, S.p?.decklink, S.p?.osd_decklink]);
+  const prevKey = JSON.stringify([S.p?.status, S.p?.loaded, S.p?.loop_mode, S.p?.decklink, S.p?.osd_decklink, S.p?.osd_state]);
   const prevPre = S.p?.preloaded;
   const vol = p.volume;
-  S.p = p; S.recvAt = performance.now();
+  S.p = p; S.recvAt = performance.now() - (p.age || 0) * 1000;
   if (vol?.length) meter.push(vol);
-  if (JSON.stringify([p.status, p.loaded, p.loop_mode, p.decklink, p.osd_decklink]) !== prevKey) renderStatic();
+  if (JSON.stringify([p.status, p.loaded, p.loop_mode, p.decklink, p.osd_decklink, p.osd_state]) !== prevKey) renderStatic();
   if (p.preloaded !== prevPre) plui.render(); else plui.renderLive();
 }
 

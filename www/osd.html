@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>sendust OSD</title>
+<!-- Rendered by CasparCG's HTML producer on the OSD channel, on top of route://<clean>.
+     Positions/sizes are fractions of the frame (x, y = top-left; size = text height / frame height). -->
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  .item { position: absolute; display: none; white-space: nowrap; line-height: 1.15; color: #fff;
+          text-shadow: 0 0 .08em #000, 0 0 .08em #000; }
+  .item.box { background: rgba(0, 0, 0, .55); padding: .08em .3em; border-radius: .12em; text-shadow: none; }
+  #tc { font-family: "DejaVu Sans Mono", "Noto Sans Mono CJK KR", monospace; font-weight: 700; letter-spacing: .02em; }
+  #tc .lbl { font-size: .45em; font-weight: 400; vertical-align: .55em; margin-right: .5em; opacity: .85; }
+  #tc.paused { color: #ffc940; } #tc.ended { color: #ff6a5e; } #tc.empty { opacity: .5; }
+  #fname { font-family: "Noto Sans CJK KR", "DejaVu Sans", sans-serif; font-weight: 500; }
+  #dbg { position: absolute; right: 1vw; top: 1vh; font: 2.5vh monospace; color: #0f0; background: #000a; display: none; }
+</style>
+</head>
+<body>
+<div id="tc" class="item"><span class="lbl"></span><span class="v"></span></div>
+<div id="fname" class="item"></div>
+<div id="dbg"></div>
+<script>
+// Self-contained (no module import) so it loads fast inside CEF.
+const qs = new URLSearchParams(location.search);
+const CH = Number(qs.get("ch") || 0), DEBUG = qs.has("debug");
+const $ = id => document.getElementById(id);
+let cfg = null, d = null, recv = 0;
+
+function tcBase(f) { return Math.round(f[0] / f[1]); }
+function isDrop(f) { return f[1] === 1001 && (tcBase(f) === 30 || tcBase(f) === 60); }
+function framesToTc(n, fps, drop) {
+  const nom = tcBase(fps), neg = n < 0;
+  let f = Math.abs(Math.round(n));
+  drop = drop && isDrop(fps);
+  if (drop) {
+    const dpm = nom === 60 ? 4 : 2, per10 = nom * 600 - dpm * 9, perMin = nom * 60 - dpm;
+    const q = Math.floor(f / per10), m = f % per10;
+    f += dpm * 9 * q + (m > dpm ? dpm * Math.floor((m - dpm) / perMin) : 0);
+  }
+  const p = x => String(x).padStart(2, "0");
+  const ff = f % nom, s = Math.floor(f / nom);
+  return `${neg ? "-" : ""}${p(Math.floor(s / 3600) % 24)}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}${drop ? ";" : ":"}${p(ff)}`;
+}
+function tcToFrames(tc, fps) {
+  const m = /^(\d+):(\d+):(\d+)[:;.,](\d+)$/.exec(tc || "");
+  if (!m) return 0;
+  const [hh, mm, ss, ff] = m.slice(1).map(Number), nom = tcBase(fps);
+  let f = ((hh * 60 + mm) * 60 + ss) * nom + ff;
+  if (tc.includes(";") && isDrop(fps)) { const dpm = nom === 60 ? 4 : 2, tm = hh * 60 + mm; f -= dpm * (tm - Math.floor(tm / 10)); }
+  return f;
+}
+
+function place(el, c) {
+  el.style.left = `${c.x * 100}vw`;
+  el.style.top = `${c.y * 100}vh`;
+  el.style.fontSize = `${c.size * 100}vh`;
+  el.classList.toggle("box", !!cfg.box);
+}
+
+function applyCfg() {
+  place($("tc"), cfg.timecode);
+  place($("fname"), cfg.filename);
+  $("tc").querySelector(".lbl").textContent = cfg.timecode.label ? { elapsed: "EL", remaining: "REM", source: "TC" }[cfg.timecode.mode] : "";
+}
+
+function frame() {
+  requestAnimationFrame(frame);
+  if (!cfg) return;
+  const tcEl = $("tc"), fnEl = $("fname");
+  const has = d && d.file;
+  fnEl.style.display = cfg.filename.enabled && has ? "block" : "none";
+  if (has && fnEl.textContent !== d.name) fnEl.textContent = d.name;
+  const showTc = cfg.timecode.enabled && has && !(d.kind === "image" && cfg.timecode.mode === "source");
+  tcEl.style.display = showTc ? "block" : "none";
+  if (!showTc || d.pos == null) return;
+  const fpsR = d.fps[0] / d.fps[1];
+  let pos = d.pos;
+  if (d.status === "playing") {
+    pos += (performance.now() - recv) / 1000 * fpsR + (cfg.offset_frames || 0);
+    pos = d.loop ? pos : Math.min(Math.floor(pos), d.fout - 1);
+  }
+  pos = Math.floor(pos);
+  let v;
+  if (cfg.timecode.mode === "remaining") v = framesToTc(Math.max(0, d.fout - pos - 1), d.fps, d.drop);
+  else if (cfg.timecode.mode === "source") v = framesToTc(tcToFrames(d.tc_start, d.fps) + pos, d.fps, d.drop);
+  else v = framesToTc(Math.max(0, pos - d.fin), d.fps, d.drop);
+  const vEl = tcEl.querySelector(".v");
+  if (vEl.textContent !== v) vEl.textContent = v;
+  tcEl.className = `item ${cfg.box ? "box" : ""} ${d.status}`;
+  if (DEBUG) { $("dbg").style.display = "block"; $("dbg").textContent = `pos ${pos} (osc ${d.pos}) ${d.status}`; }
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws/osd?ch=${CH}`);
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "cfg") { cfg = m.osd; applyCfg(); }
+    else if (m.type === "pos") { d = m; recv = performance.now() - (m.age || 0) * 1000; }
+  };
+  ws.onclose = () => { d = null; setTimeout(connect, 1000); };
+}
+connect();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -124,5 +124,12 @@ class Engine:
             return {}, {}
         return self._fresh(ly, "fg", now), self._fresh(ly, "bg", now)
 
+    def key_age(self, channel: int, layer: int, key: str, side: str = "fg") -> float | None:
+        """Seconds since an OSC key of a layer was last received (for client-side interpolation)."""
+        ch = self.channels.get(channel)
+        ly = ch and ch["layers"].get(layer)
+        t = ly and ly[side + "_t"].get(key)
+        return time.monotonic() - t if t else None
+
     def layer_fg(self, channel: int, layer: int) -> dict:
         return self.layer(channel, layer)[0]

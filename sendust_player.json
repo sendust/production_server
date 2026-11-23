@@ -20,7 +20,10 @@
   "shared_playlist_path": "/mnt/storage1",
 
   "osd": {
-    "timecode": { "enabled": true, "mode": "elapsed", "x": 0.05, "y": 0.86, "size": 0.05 },
+    "enabled": true,
+    "offset_frames": 1,
+    "box": true,
+    "timecode": { "enabled": true, "mode": "elapsed", "label": true, "x": 0.05, "y": 0.86, "size": 0.05 },
     "filename": { "enabled": true, "x": 0.05, "y": 0.06, "size": 0.03 }
   },
 
