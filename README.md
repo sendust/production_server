@@ -48,7 +48,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | `casparcg.video_layer` / `osd_route_layer` / `osd_overlay_layer` | 10 / 10 / 20 |
 | `channels[]` | `channel_index`, `name`, `clean_out`(CasparCG 채널 번호), `osd_out`(CasparCG 채널 번호 또는 null), `tc_mode`(`source` = MXF TC / `elapsed` = IN 을 0 으로, 재생 창에서 TC 클릭으로 바뀌고 여기 저장됨) |
 | `browser.lower_root` | 미디어 브라우저 아래 판넬 시작 경로 (기본 `/mnt`) |
-| `shared_playlist_path` | 공유 플레이리스트 A~D 저장 폴더 (호스트 간 공유 경로) |
+| `shared_playlist_path` | 공유 플레이리스트 A~D 저장 폴더 (호스트·채널 간 공유). LIST 1~9 는 채널마다 따로 `data/playlists/ch<idx>/slot_N.json`, 저장할 때마다 이전 파일을 `slot_N.prev.json` 으로 남긴다 |
 | `playlist.image_sec` | 이미지 항목 기본 길이(초) |
 | `osd.enabled`, `osd.update_frames`, `osd.offset_frames`, `osd.box` | OSD 사용, 갱신 주기(프레임, 기본 4), TC 지연 보정(프레임), 반투명 배경 |
 | `osd.timecode` | `enabled`, `mode`(`elapsed`/`remaining`/`source`), `label`, `x`, `y`, `size` (화면 비율) |

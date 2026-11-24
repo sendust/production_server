@@ -1,12 +1,16 @@
 """Playlist data for one playback channel + slot storage.
 
-Slots: '1'..'9' are local to this host (data/playlists/slot_N.json),
-       'A'..'D' are shared between hosts (<shared_playlist_path>/sendust_playlist_X.json).
+Slots: '1'..'9' are local to this host AND this channel (data/playlists/ch<idx>/slot_N.json) --
+       PLAY 1 and PLAY 2 each have their own LIST 1-9, so saving on one channel never overwrites
+       the other's list; 'A'..'D' are shared between channels and hosts
+       (<shared_playlist_path>/sendust_playlist_X.json).
+Every save keeps the previous file as <name>.prev.json (one generation) so a wrong save can be undone by hand.
 Saved files reference clips by path relative to the CasparCG media path, so another host with
 the same media resolves them; missing clips are kept and flagged.
 """
 import json
 import os
+import shutil
 import socket
 import time
 import uuid
@@ -26,8 +30,13 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:10]
 
 
-def _atomic_write(path: Path, data: dict):
+def _atomic_write(path: Path, data: dict, keep_prev: bool = False):
     path.parent.mkdir(parents=True, exist_ok=True)
+    if keep_prev and path.exists():
+        try:
+            shutil.copy2(path, path.with_name(f"{path.stem}.prev{path.suffix}"))
+        except OSError:
+            pass
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
     tmp.replace(path)
@@ -47,7 +56,17 @@ class Playlist:
         self.version = 0
         self._state_file = DATA / f"ch{ch_idx}_current.json"
         self._names: dict = {}   # (slot file, mtime) -> saved list name
+        self._migrate_local_slots()
         self._restore()
+
+    def _migrate_local_slots(self):
+        """LIST 1-9 used to be one set per host (data/playlists/slot_N.json, shared by every channel).
+        Each channel starts with a copy of those files; the old files are left in place."""
+        for s in LOCAL_SLOTS:
+            old, new = DATA / f"slot_{s}.json", self.slot_path(s)
+            if old.exists() and not new.exists():
+                new.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(old, new)
 
     # ---- persistence of the working list -----------------------------------
     def _restore(self):
@@ -187,7 +206,7 @@ class Playlist:
     # ---- slots --------------------------------------------------------------
     def slot_path(self, slot: str) -> Path:
         if slot in LOCAL_SLOTS:
-            return DATA / f"slot_{slot}.json"
+            return DATA / f"ch{self.ch}" / f"slot_{slot}.json"
         if slot in SHARED_SLOTS:
             return self.shared / f"sendust_playlist_{slot}.json"
         raise ValueError(f"bad slot {slot}")
@@ -225,7 +244,7 @@ class Playlist:
             "items": [{"type": "pause"} if it["type"] == "pause" else
                       {"type": "clip", "file": it["file"], "in": it["in"], "out": it["out"]} for it in self.items],
         }
-        _atomic_write(self.slot_path(slot), data)
+        _atomic_write(self.slot_path(slot), data, keep_prev=True)
         self.slot = slot
         self.changed()
 
