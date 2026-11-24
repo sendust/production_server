@@ -1,6 +1,6 @@
 // Media browser (uBrowser-like): upper pane = CasparCG media path, lower pane = one favourite path,
 // each with a folder tree and a file list; "전송하기" copies the lower selection into the upper folder.
-import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout, openWin } from "./common.js";
+import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout, openWin, resizableColumns } from "./common.js";
 import { initTheme } from "./theme.js";
 
 const S = { info: null, favorites: [], jobs: new Map(), session: {}, active: null };
@@ -34,6 +34,7 @@ class Pane {
     this.sort = "name"; this.desc = false; this.filter = "";
     this.nodes = new Map();     // rel dir -> {open, kids: [rel] | null}
     this._bind();
+    resizableColumns($("table", this.list), `sp.ubCols.${el.id}`);   // per panel
   }
 
   get base() { return this.root === "media" ? S.info?.media_path : S.info?.host_root; }

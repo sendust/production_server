@@ -146,6 +146,49 @@ export function openWin(url, name, w, h) {
   return win;
 }
 
+// Resizable table columns: drag the right edge of a header cell; double-click it for automatic widths.
+// Every column except the last gets a fixed px width (the last takes what is left); remembered in
+// localStorage under `key`. The table gets class "rzt" (+ "fixed" once widths are set).
+export function resizableColumns(table, key) {
+  const ths = [...table.tHead.rows[0].cells], last = ths.length - 1;
+  let cols = null;
+  table.classList.add("rzt");
+  const apply = () => {
+    table.classList.toggle("fixed", !!cols);
+    ths.forEach((th, i) => { th.style.width = cols && i < last ? `${cols[i]}px` : ""; });
+    table.style.minWidth = cols ? `${cols.reduce((a, b) => a + b, 0) + 80}px` : "";
+  };
+  try { const c = JSON.parse(localStorage.getItem(key)); if (Array.isArray(c) && c.length === last) cols = c; } catch { /* none */ }
+  apply();
+  ths.slice(0, last).forEach((th, i) => {
+    const h = document.createElement("span");
+    h.className = "rz";
+    h.title = "끌어서 열 너비 조절 (더블클릭: 자동)";
+    th.append(h);
+    h.addEventListener("click", e => e.stopPropagation());   // not a header click (sorting)
+    h.addEventListener("pointerdown", e => {
+      e.preventDefault(); e.stopPropagation();
+      if (!cols) cols = ths.slice(0, last).map(t => Math.ceil(t.getBoundingClientRect().width) + 1);   // never cut what fits now
+      const x0 = e.clientX, w0 = cols[i];
+      h.setPointerCapture(e.pointerId);
+      h.classList.add("drag");
+      const move = ev => { cols[i] = Math.max(28, Math.round(w0 + ev.clientX - x0)); apply(); };
+      const up = () => {
+        h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up);
+        h.classList.remove("drag");
+        try { localStorage.setItem(key, JSON.stringify(cols)); } catch { /* private mode */ }
+      };
+      h.addEventListener("pointermove", move);
+      h.addEventListener("pointerup", up);
+    });
+    h.addEventListener("dblclick", e => {
+      e.stopPropagation();
+      cols = null; apply();
+      try { localStorage.removeItem(key); } catch { /* */ }
+    });
+  });
+}
+
 // launcher "모두 종료": every window opened by a launcher closes itself (window.close() only works for
 // script-opened windows, so a tab the user opened by hand stays)
 if ("BroadcastChannel" in window && !location.pathname.endsWith("launcher.html")) {

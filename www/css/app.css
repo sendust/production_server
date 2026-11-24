@@ -137,12 +137,13 @@ dialog ul { max-height: 200px; overflow: auto; margin: 8px 0; padding-left: 18px
 .pl { position: relative; }
 .pl:focus { outline: none; }
 .pl th.r, .pl td.r { text-align: right; }
-/* resizable columns (playlist_ui._columns) */
-.pl th .rz { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
-.pl th .rz:hover, .pl th .rz.drag { background: var(--accent); opacity: .7; }
-.pl table.fixed { table-layout: fixed; }
-.pl table.fixed th, .pl table.fixed td { overflow: hidden; text-overflow: ellipsis; }
-.pl table.fixed td.name { max-width: none; width: auto; }
+/* resizable columns (common.resizableColumns) */
+table.rzt th { position: sticky; }
+table.rzt th .rz { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+table.rzt th .rz:hover, table.rzt th .rz.drag { background: var(--accent); opacity: .7; }
+table.rzt.fixed { table-layout: fixed; }
+table.rzt.fixed th, table.rzt.fixed td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.rzt.fixed td.name { max-width: none; width: auto; }
 .pl td { font-variant-numeric: tabular-nums; }
 .pl td.c-n { width: 34px; text-align: right; color: var(--dim); font-family: var(--mono); }
 .pl td.name { max-width: 0; width: 45%; overflow: hidden; text-overflow: ellipsis; }
