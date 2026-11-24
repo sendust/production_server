@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/ump.css">
 <link rel="stylesheet" href="css/theme.css">
-<script>try { const t = localStorage.getItem("sp.theme"); if (t && t !== "dark") document.documentElement.dataset.theme = t; } catch {}</script>
+<script>try { const t = localStorage.getItem("sp.theme.ch" + (new URLSearchParams(location.search).get("ch") || "0")); if (t && t !== "dark") document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <div class="pb">

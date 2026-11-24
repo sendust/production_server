@@ -366,4 +366,4 @@ document.addEventListener("keydown", e => {
 renderStatic();
 requestAnimationFrame(renderLive);
 
-initTheme(document.getElementById("btn-theme"));
+initTheme(document.getElementById("btn-theme"), `sp.theme.ch${CH}`);

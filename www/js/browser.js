@@ -490,4 +490,4 @@ connectWs(async m => {
   }
 }
 
-initTheme(document.getElementById("btn-theme"));
+initTheme(document.getElementById("btn-theme"), "sp.theme.browser");
