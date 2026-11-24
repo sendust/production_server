@@ -71,6 +71,10 @@ export class PlaylistUI {
     });
     this.tbody.innerHTML = rows.join("");
     $(".pl-empty", this.list).classList.toggle("hidden", pl.items.length > 0);
+    // the on-air line changed (AUTO next, CUE, load): bring it into view if it is scrolled away.
+    // Only on a change, so the operator can still scroll the list freely in between.
+    if (cur && cur !== this._shownCur) this._revealCur();
+    this._shownCur = cur;
     const clips = pl.items.filter(i => i.type === "clip");
     const total = clips.reduce((a, it) => a + itemSec(it), 0);
     $("#pl-total").textContent = `${clips.length} clips · ${secTc(total)}`;
@@ -79,6 +83,17 @@ export class PlaylistUI {
     pb.disabled = !one;
     pb.title = one ? `VGA 프리뷰: ${one.name}` : "VGA 프리뷰: MXF 클립 하나를 선택하세요";
     this.renderLive();
+  }
+
+  _revealCur() {
+    const row = $("tr.cur", this.tbody);
+    if (!row) return;
+    const lr = this.list.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    const head = this.list.querySelector("thead")?.getBoundingClientRect().height ?? 0;   // sticky header covers the top
+    if (rr.top < lr.top + head || rr.bottom > lr.bottom) {
+      // centre it, so the next lines are visible too
+      this.list.scrollTop += rr.top - lr.top - head - (this.list.clientHeight - head - rr.height) / 2;
+    }
   }
 
   // On-air estimate (wall clock) for the current item and the ones chained after it, and
