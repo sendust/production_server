@@ -137,8 +137,9 @@ class SysInfo(threading.Thread):
     GPU_PERIOD = 2.0   # nvidia-smi loop interval (seconds)
     GPU_RETRY = 60.0   # restart delay after the loop process dies (driver reload etc.)
 
-    def __init__(self):
+    def __init__(self, count_ffmpeg: bool = False):
         super().__init__(name="sysinfo", daemon=True)
+        self.count_ffmpeg = count_ffmpeg
         self._stop = threading.Event()
         self.static = {
             "hostname": socket.gethostname(),
@@ -203,7 +204,9 @@ class SysInfo(threading.Thread):
             nics.append({"name": name, "ips": ips, "speed_mbps": st.speed, "rx_bps": rx, "tx_bps": tx})
         self._prev_net, self._prev_ts = counters, now
 
-        ff = _count_ffmpeg()
+        # sendust playlist: the ffmpeg process count (a full /proc scan, ~8 ms per tick with ~600
+        # processes = half of this collector's CPU) is not shown here, so it is not collected
+        ff = _count_ffmpeg() if self.count_ffmpeg else None
         self._collect_gpus(now)
         vm = psutil.virtual_memory()
         snap = dict(self.static)
