@@ -2,7 +2,9 @@
 .ub { display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
 .ub-title { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 10px; background: var(--title); border-bottom: 1px solid var(--line); flex: none; }
 .ub-title .t { font-size: 22px; font-weight: 300; letter-spacing: .5px; }
-.ub-title .route { display: flex; gap: 6px; }
+.ub-title .route { display: flex; gap: 10px; }
+.ub-title .pgrp { display: inline-flex; gap: 2px; }
+.ub-title .pgrp .ubtn.dim { opacity: .55; }
 .ub-title .sp { flex: 1; }
 .ub-title .dots { display: flex; gap: 8px; font-size: 11px; color: var(--dim); }
 

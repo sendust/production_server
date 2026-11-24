@@ -402,22 +402,31 @@ function pump() {
 }
 
 // ================================================================ playback windows
+// Title bar: per channel "+ PLAY n" (add the files selected in the CasparCG MEDIA panel to the end of
+// that channel's playlist) and "↗" (open its playback window). The same add buttons sit under the panel.
 function renderPlayers() {
-  $("#players").innerHTML = (S.info?.channels ?? []).map(c =>
-    `<button class="ubtn sm" data-open="${c.channel_index}" title="재생 창 열기">${esc(c.name)} ↗</button>`).join("");
+  $("#players").innerHTML = (S.info?.channels ?? []).map(c => `<span class="pgrp">
+    <button class="ubtn sm cyan" data-add="${c.channel_index}" title="CasparCG MEDIA 에서 선택한 클립을 ${esc(c.name)} 플레이리스트 끝에 추가">+ ${esc(c.name)}</button>
+    <button class="ubtn sm" data-open="${c.channel_index}" title="${esc(c.name)} 재생 창 열기">↗</button></span>`).join("");
   $$("[data-open]").forEach(b => b.onclick = () => openWin(`/player.html?ch=${b.dataset.open}`, `sendust_player_${b.dataset.open}`, 885, 1050));
+  $$("#players [data-add]").forEach(b => b.onclick = () => addTo(Number(b.dataset.add)));
+  renderSendTo();
+}
+const selectedClips = () => media.selected().filter(x => !x.dir && x.kind).map(x => x.path);
+async function addTo(ch) {
+  const fs = selectedClips(), name = S.info.channels.find(c => c.channel_index === ch)?.name ?? `CH ${ch}`;
+  if (!fs.length) return toast("CasparCG MEDIA 판넬에서 클립을 먼저 선택하세요");
+  try { await api(`ch/${ch}/playlist/add`, { files: fs }); toast(`${fs.length} clip(s) → ${name}`, 1500); }
+  catch (e) { toast(e.message); }
 }
 function renderSendTo() {
   const box = $(".sendto", media.el);
   if (!S.info) return;
-  const files = media.selected().filter(x => !x.dir && x.kind);
+  const n = selectedClips().length;
   box.innerHTML = S.info.channels.map(c =>
-    `<button class="ubtn sm cyan" data-ch="${c.channel_index}" ${files.length ? "" : "disabled"} title="선택한 파일을 ${esc(c.name)} 플레이리스트 끝에 추가">→ ${esc(c.name)}</button>`).join("");
-  $$("[data-ch]", box).forEach(b => b.onclick = async () => {
-    const fs = media.selected().filter(x => !x.dir && x.kind).map(x => x.path);
-    try { await api(`ch/${b.dataset.ch}/playlist/add`, { files: fs }); toast(`${fs.length} clip(s) → ${b.textContent.slice(2)}`, 1500); }
-    catch (e) { toast(e.message); }
-  });
+    `<button class="ubtn sm cyan" data-ch="${c.channel_index}" ${n ? "" : "disabled"} title="선택한 파일을 ${esc(c.name)} 플레이리스트 끝에 추가">→ ${esc(c.name)}</button>`).join("");
+  $$("[data-ch]", box).forEach(b => b.onclick = () => addTo(Number(b.dataset.ch)));
+  $$("#players [data-add]").forEach(b => b.classList.toggle("dim", !n));
 }
 
 // ================================================================ WS
