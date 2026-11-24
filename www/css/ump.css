@@ -133,6 +133,9 @@ body { background: var(--bg); }
 .vsplit { flex: none; height: 7px; background: var(--split) linear-gradient(90deg, transparent 47%, var(--grip) 47%, var(--grip) 53%, transparent 53%) center / 60px 3px no-repeat;
   cursor: ns-resize; touch-action: none; }
 .vsplit:hover, .vsplit.drag { background-color: #19d3e655; }
+/* 3+ channels: TC block, IN/OUT, transport and playlist controls at 80 % */
+.pb.compact .tcblk, .pb.compact .inout, .pb.compact .trans,
+.pb.compact .lt, .pb.compact .lt2, .pb.compact .bottom { zoom: .8; }
 .pb.short .info { gap: 4px; padding: 8px 18px; }
 .pb.short .info .fn { font-size: 24px; -webkit-line-clamp: 1; }
 .pb.short .info .row { font-size: 17px; }

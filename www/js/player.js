@@ -279,7 +279,11 @@ connectWs(m => {
     dot("#d-amcp", m.amcp); dot("#d-osc", m.engine?.osc_alive);
     const p = m.players?.find(x => x.idx === CH);
     if (p) applyPlayer(p);
-    if (m.type === "hello") renderStatic();
+    if (m.type === "hello") {
+      renderStatic();
+      // 3+ playback channels: windows are narrower/stacked, so TC, transport and list controls go to 80 %
+      $(".pb").classList.toggle("compact", (S.info?.channels?.length ?? 0) > 2);
+    }
   }
   if (m.type === "amcp") dot("#d-amcp", m.connected);
   if (m.type === "tc_mode" && m.ch === CH) { S.tcMode = m.mode; renderTcMode(); }
