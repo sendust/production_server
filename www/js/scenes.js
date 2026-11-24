@@ -116,7 +116,8 @@ export class Scenes {
   tc(k) {
     const ld = this.h.loaded();
     const i = ld.info;
-    return framesToTc((tcToFrames(i.tc_start, i.fps) ?? 0) + k, i.fps, i.drop);
+    const base = this.h.tcBase ? this.h.tcBase() : (tcToFrames(i.tc_start, i.fps) ?? 0);   // follows the TC mode
+    return framesToTc(base + k, i.fps, i.drop);
   }
 
   hover(e) {
@@ -159,7 +160,7 @@ export class Scenes {
     const d = this.data, ld = this.h.loaded();
     const mi = ld?.in ?? null, mo = ld?.out ?? null;
     const W = this.cv.clientWidth, H = this.cv.clientHeight;
-    const key = `${W}|${H}|${this.threshold()}|${mi}|${mo}|${d?.from}|${d?.to}|${d?.file}|${this.hot}`;
+    const key = `${W}|${H}|${this.threshold()}|${mi}|${mo}|${d?.from}|${d?.to}|${d?.file}|${this.hot}|${this.h.tcBase?.()}`;
     if (key === this.key) return;
     this.key = key;
     const dpr = devicePixelRatio || 1;
@@ -179,7 +180,7 @@ export class Scenes {
     g.font = "10px ui-monospace, monospace";
     g.textAlign = "left";
     const nom = Math.round(fpsR);
-    const ts = tcToFrames(ld.info.tc_start, ld.info.fps) ?? 0;
+    const ts = this.h.tcBase ? this.h.tcBase() : (tcToFrames(ld.info.tc_start, ld.info.fps) ?? 0);
     for (let k = d.from; k <= d.to + 1; k++) {
       if ((ts + k) % nom !== 0) continue;   // whole source-TC seconds
       const x = (k - d.from) * slot;

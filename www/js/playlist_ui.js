@@ -58,14 +58,13 @@ export class PlaylistUI {
         return `<tr class="${cls}" data-id="${it.id}" data-i="${i}" draggable="true"><td colspan="7">PAUSE</td></tr>`;
       }
       n++;
-      const ts = tcToFrames(it.tc_start || "00:00:00:00", it.fps) ?? 0;
-      const img = it.kind === "image";
+      const img = it.kind === "image";   // IN / OUT: clip start = 00:00:00:00, not the MXF timecode
       return `<tr class="${cls}" data-id="${it.id}" data-i="${i}" draggable="true">
         <td class="c-n">${n}</td>
         <td class="name" title="${esc(it.file)}">${esc(it.name)}</td>
         <td class="dim">${esc(it.kind)}${it.audio_ch ? ` · ${it.audio_ch}ch` : ""}</td>
-        <td class="r tc in">${img ? "" : framesToTc(ts + it.in, it.fps, it.drop)}</td>
-        <td class="r tc out">${img ? "" : framesToTc(ts + it.out, it.fps, it.drop)}</td>
+        <td class="r tc in">${img ? "" : framesToTc(it.in, it.fps, it.drop)}</td>
+        <td class="r tc out">${img ? "" : framesToTc(it.out, it.fps, it.drop)}</td>
         <td class="r tc">${durTc(itemFrames(it), it)}</td>
         <td class="r tc dim" data-eta="${it.id}"></td></tr>`;
     });
@@ -81,16 +80,17 @@ export class PlaylistUI {
     this.renderLive();
   }
 
-  // On-air estimate (wall clock) for the current item and the ones chained after it, and the
-  // "clip n/N · remaining" box. Called on every tick.
+  // On-air estimate (wall clock) for the current item and the ones chained after it, and
+  // this.live = {nth, count, afterSec} for the playback window's playlist REM (null when
+  // Playlist play is off or the loaded clip is not the playlist's current item). Called on every tick.
   renderLive() {
     const pl = this.pl, p = this.getPlayer();
     if (!pl) return;
     const clips = pl.items.filter(i => i.type === "clip");
     const curIdx = pl.items.findIndex(i => i.id === pl.current_id);
-    const box = $("#box-pl");
     $$("[data-eta]", this.tbody).forEach(td => td.textContent = "");
-    if (curIdx < 0 || !p?.loaded || p.loaded.item_id !== pl.current_id) { box.classList.add("hidden"); return; }
+    this.live = null;
+    if (curIdx < 0 || !p?.loaded || p.loaded.item_id !== pl.current_id) return;
     const cur = pl.items[curIdx];
     const fps = cur.fps[0] / cur.fps[1];
     const pos = p.pos ?? cur.in;
@@ -113,10 +113,11 @@ export class PlaylistUI {
         t += itemSec(it) * 1000;
       }
     }
-    const nth = clips.findIndex(i => i.id === cur.id) + 1;
-    box.classList.remove("hidden");
-    $("#tc-pl").textContent = `${nth}/${clips.length} · ${secTc(remain)}`;
-    box.title = pl.enabled ? "현재 클립 번호/전체 · 다음 PAUSE 또는 끝까지 남은 시간" : "Playlist play OFF: 현재 클립만";
+    if (pl.enabled) {   // everything after the current clip to the end of the list (PAUSE lines skipped)
+      const afterSec = pl.items.slice(curIdx + 1).filter(it => it.type === "clip" && !it.missing)
+        .reduce((a, it) => a + itemSec(it), 0);
+      this.live = { nth: clips.findIndex(i => i.id === cur.id) + 1, count: clips.length, afterSec };
+    }
   }
 
   exportCsv() {

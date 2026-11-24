@@ -42,6 +42,6 @@
   "total_sdi_consumer": 3,
   "channels": [
     { "channel_index": 0, "name": "PLAY 1", "clean_out": 1, "osd_out": 2 },
-    { "channel_index": 1, "name": "PLAY 2", "clean_out": 3, "osd_out": null }
+    { "channel_index": 1, "name": "PLAY 2", "clean_out": 3, "osd_out": null, "tc_mode": "source" }
   ]
 }

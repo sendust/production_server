@@ -429,6 +429,28 @@ async def ch_sdi_preview(idx: int, b: SdiCmd):
     return {"ok": True, "sdi_preview": app_state.sdi.state(p)}
 
 
+class TcModeCmd(BaseModel):
+    mode: str   # source | elapsed
+
+
+@api.post("/api/v1/ch/{idx}/tc_mode")
+async def ch_tc_mode(idx: int, b: TcModeCmd):
+    """Big TC of the playback window: MXF timecode or elapsed from mark-in. Saved in
+    sendust_player.json (channels[].tc_mode) and pushed to every window of the channel."""
+    p = app_state.player(idx)
+    if b.mode not in config_mod.PLAYER_TC_MODES:
+        raise HTTPException(400, f"mode must be one of {config_mod.PLAYER_TC_MODES}")
+    try:
+        config_mod.save_channel_value(p.idx, "tc_mode", b.mode)
+    except (OSError, ValueError) as e:
+        raise HTTPException(500, f"config save: {e}")
+    for ch in app_state.cfg["channels"]:
+        if ch["channel_index"] == p.idx:
+            ch["tc_mode"] = b.mode
+    await app_state.hub.broadcast({"type": "tc_mode", "ch": p.idx, "mode": b.mode})
+    return {"ok": True, "mode": b.mode}
+
+
 @api.post("/api/v1/ch/{idx}/{action}")
 async def ch_action(idx: int, action: str, body: ChCmd | None = None):
     p = app_state.player(idx)

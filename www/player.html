@@ -35,10 +35,10 @@
   <section class="tcblk">
     <div class="state eject" id="state">EJECT</div>
     <div class="tcs">
-      <span class="l">TC</span><span class="v tcv" id="tc">--:--:--;--</span>
+      <span class="l tcsel" id="tc-lbl" title="클릭: MXF 타임코드 ↔ 경과 시간(IN = 0) 전환">TC</span><span class="v tcv tcsel" id="tc" title="클릭: MXF 타임코드 ↔ 경과 시간(IN = 0) 전환">--:--:--;--</span>
       <span class="l">/ DUR</span><span class="v tcv" id="tc-dur">--:--:--;--</span>
-      <span class="l">EL</span><span class="v tcv" id="tc-el" style="font-size:24px;color:var(--dim)">--:--:--;--</span>
       <span class="l">REM</span><span class="v tcv rem" id="tc-rem">--:--:--;--</span>
+      <span class="l plrem" id="pl-n" title="재생 중인 클립 번호 / 플레이리스트 전체 클립 수"></span><span class="v tcv plrem" id="tc-plrem" title="플레이리스트 전체 남은 시간 (현재 클립 포함, 끝까지)">--:--:--;--</span>
     </div>
   </section>
 
@@ -106,9 +106,7 @@
     <label class="uchk">Loop <select class="uselect" id="loopmode" style="height:30px;font-size:14px">
       <option value="none">none</option><option value="single">single</option><option value="playlist">playlist</option></select></label>
     <span class="sp"></span>
-    <span class="name" id="pl-name">list1</span>
     <span class="dim mono" id="pl-total"></span>
-    <span class="hidden" id="box-pl"><span id="tc-pl"></span></span>
   </section>
 
   <section class="panel listwrap">

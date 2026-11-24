@@ -63,8 +63,75 @@ def load(path: Path = CONFIG_PATH) -> dict:
         ch.setdefault("channel_index", i)
         ch.setdefault("name", f"PLAY {i + 1}")
         ch.setdefault("osd_out", None)
+        if ch.get("tc_mode") not in ("source", "elapsed"):
+            ch["tc_mode"] = "source"
         if not isinstance(ch.get("clean_out"), int):
             raise ValueError(f"channels[{i}].clean_out must be a CasparCG channel number")
     if cfg["osd"]["timecode"]["mode"] not in OSD_TC_MODES:
         raise ValueError(f"osd.timecode.mode must be one of {OSD_TC_MODES}")
     return cfg
+
+
+PLAYER_TC_MODES = ("source", "elapsed")   # playback window big TC: MXF timecode / mark-in = 0
+
+
+def _object_spans(text: str, start: int) -> list[tuple[int, int]]:
+    """Spans of the top-level {...} objects of the JSON array that opens at text[start] == '['."""
+    spans, depth, in_str, esc, obj0 = [], 0, False, False, None
+    for k in range(start + 1, len(text)):
+        c = text[k]
+        if in_str:
+            esc = (c == "\\") and not esc
+            if c == '"' and not esc:
+                in_str = False
+            continue
+        if c == '"':
+            in_str, esc = True, False
+        elif c in "{[":
+            if depth == 0 and c == "{":
+                obj0 = k
+            depth += 1
+        elif c in "}]":
+            if depth == 0:
+                return spans          # end of the array
+            depth -= 1
+            if depth == 0 and c == "}":
+                spans.append((obj0, k + 1))
+    return spans
+
+
+def save_channel_value(channel_index: int, key: str, value, path: Path = CONFIG_PATH):
+    """Set channels[n].<key> in sendust_player.json, keeping the hand-written layout when possible
+    (only that channel's object is touched); falls back to a plain re-dump if the edit can't be done."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    data = json.loads(text)
+    chans = data.get("channels", [])
+    i = next((k for k, c in enumerate(chans) if c.get("channel_index", k) == channel_index), None)
+    if i is None:
+        raise ValueError(f"no channel {channel_index}")
+    chans[i][key] = value
+    new = None
+    m = re.search(r'"channels"\s*:\s*\[', text)
+    spans = _object_spans(text, m.end() - 1) if m else []
+    if i < len(spans):
+        a, b = spans[i]
+        obj, val = text[a:b], json.dumps(value, ensure_ascii=False)
+        pat = re.compile(r'("%s"\s*:\s*)("(?:[^"\\]|\\.)*"|[^,}\s]+)' % re.escape(key))
+        if pat.search(obj):
+            obj = pat.sub(lambda mm: mm.group(1) + val, obj, count=1)
+        else:
+            body = obj[:-1].rstrip()
+            tail = obj[len(body):-1]
+            obj = f'{body}, "{key}": {val}{tail}}}'
+        new = text[:a] + obj + text[b:]
+        try:
+            if json.loads(new) != data:
+                new = None
+        except ValueError:
+            new = None
+    if new is None:
+        new = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(new, encoding="utf-8")
+    tmp.replace(path)

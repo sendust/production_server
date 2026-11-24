@@ -61,7 +61,10 @@ body { background: var(--bg); }
 .tcs .v { font-size: 38px; font-weight: 700; line-height: 1.1; }
 .tcs .rem.warn { color: var(--warn); }
 .tcs .rem.alert { color: var(--bad); animation: blink 1s steps(1) infinite; }
-.tcs .pli { grid-column: 3 / 5; font-size: 14px; color: var(--cyan); text-align: right; }
+.tcs .tcsel { cursor: pointer; user-select: none; }
+.tcs #tc-lbl.el { color: var(--cyan); }
+.tcs .plrem { color: var(--cyan); }
+.tcs .plrem.off { visibility: hidden; }
 
 .inout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: #161616; flex: none; }
 .inout > div { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); padding: 3px 8px; }

@@ -28,7 +28,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | 창 | 주소 |
 |---|---|
 | 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
-| 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC/DUR/EL/REM, IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
+| 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC(클릭: MXF TC ↔ 경과)/DUR/REM(+ Playlist play 시 n/N 과 리스트 전체 남은 시간), IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
 | 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황 |
 | 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터) |
 | VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
@@ -46,7 +46,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | `auth`, `password` | `true` 면 웹 UI 에 비밀번호 로그인 (localhost 는 예외: CasparCG OSD 페이지) |
 | `casparcg.media_path` | CasparCG media-path 와 같게 (미디어 브라우저 위 판넬, 클립 경로 기준) |
 | `casparcg.video_layer` / `osd_route_layer` / `osd_overlay_layer` | 10 / 10 / 20 |
-| `channels[]` | `channel_index`, `name`, `clean_out`(CasparCG 채널 번호), `osd_out`(CasparCG 채널 번호 또는 null) |
+| `channels[]` | `channel_index`, `name`, `clean_out`(CasparCG 채널 번호), `osd_out`(CasparCG 채널 번호 또는 null), `tc_mode`(`source` = MXF TC / `elapsed` = IN 을 0 으로, 재생 창에서 TC 클릭으로 바뀌고 여기 저장됨) |
 | `browser.lower_root` | 미디어 브라우저 아래 판넬 시작 경로 (기본 `/mnt`) |
 | `shared_playlist_path` | 공유 플레이리스트 A~D 저장 폴더 (호스트 간 공유 경로) |
 | `playlist.image_sec` | 이미지 항목 기본 길이(초) |

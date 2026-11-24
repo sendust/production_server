@@ -1,6 +1,6 @@
 // Playback window (uMP-style layout, sized for HD): one page per playback channel (?ch=<channel_index>).
 import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, esc, toast, addLogout } from "./common.js";
-import { PlaylistUI } from "./playlist_ui.js";
+import { PlaylistUI, secTc } from "./playlist_ui.js";
 import { Scenes } from "./scenes.js";
 import { Timeline } from "./timeline.js";
 import { GridMeter } from "./meter.js";
@@ -29,6 +29,10 @@ const fpsOf = () => loaded()?.info?.fps || [30000, 1001];
 const fpsR = () => { const f = fpsOf(); return f[0] / f[1]; };
 const tcStart = () => { const l = loaded(); return l ? (tcToFrames(l.info.tc_start, l.info.fps) ?? 0) : 0; };
 const NO_TC = "--:--:--;--";
+// big TC: "source" = MXF timecode, "elapsed" = mark-in is 00:00:00:00 (channels[].tc_mode in the config)
+const tcMode = () => S.tcMode ?? S.info?.channels?.find(c => c.channel_index === CH)?.tc_mode ?? "source";
+// timecode of frame 0 for TC / IN / OUT / timeline: the MXF start TC, or the clip start (elapsed mode)
+const tcBase = () => tcMode() === "source" ? tcStart() : 0;
 
 // position interpolated between 20 Hz ticks while playing
 function livePos() {
@@ -67,6 +71,7 @@ function makeScenes() {
     seek: f => seekTo(f),
     pause: () => { if (S.p?.status === "playing") cmd("pause"); },
     focus: () => document.body.focus({ preventScroll: true }),
+    tcBase: () => tcBase(),
   }, S.info?.zoom_timeline ?? {});
 }
 
@@ -163,16 +168,41 @@ function renderStatic() {
   renderPreview();
 }
 
+// Playlist play ON: "n/N" + remaining of the whole list (this clip + every clip after it)
+function renderPlRem(clipRemSec) {
+  const li = clipRemSec != null ? plui.live : null;
+  $("#pl-n").classList.toggle("off", !li);
+  $("#tc-plrem").classList.toggle("off", !li);
+  if (!li) return;
+  $("#pl-n").textContent = `${li.nth}/${li.count}`;
+  $("#tc-plrem").textContent = secTc(clipRemSec + li.afterSec);
+}
+
+function renderTcMode() {
+  const el = tcMode() === "elapsed";
+  $("#tc-lbl").textContent = el ? "EL" : "TC";
+  $("#tc-lbl").classList.toggle("el", el);
+}
+async function toggleTcMode() {
+  const mode = tcMode() === "source" ? "elapsed" : "source";
+  S.tcMode = mode; renderTcMode();
+  try { await api(`ch/${CH}/tc_mode`, { mode }); } catch (e) { toast(`TC 모드 저장 실패: ${e.message}`); }
+}
+for (const id of ["#tc", "#tc-lbl"]) {
+  $(id).addEventListener("mousedown", e => e.preventDefault());   // keep keyboard shortcuts alive
+  $(id).onclick = toggleTcMode;
+}
+
 function renderLive() {
   const p = S.p, l = p?.loaded;
   const pos = livePos();
   if (l && pos != null && l.info.kind !== "image") {
-    const i = l.info, ts = tcStart();
-    $("#tc").textContent = framesToTc(ts + pos, i.fps, i.drop);
-    $("#tc-el").textContent = durTc(Math.max(0, pos - l.in), i);
+    const i = l.info, ts = tcBase();
+    $("#tc").textContent = tcMode() === "source" ? framesToTc(ts + pos, i.fps, i.drop) : durTc(Math.max(0, pos - l.in), i);
     const rem = Math.max(0, l.out - pos - 1);
     const re = $("#tc-rem");
     re.textContent = durTc(rem, i);
+    renderPlRem(rem / fpsR());
     re.classList.toggle("alert", p.status === "playing" && rem < fpsR() * 5);
     re.classList.toggle("warn", p.status === "playing" && rem >= fpsR() * 5 && rem < fpsR() * 10);
     $("#tc-in").textContent = framesToTc(ts + l.in, i.fps, i.drop);
@@ -181,17 +211,18 @@ function renderLive() {
   } else if (l && l.info.kind === "image" && pos != null) {
     const i = l.info;
     $("#tc").textContent = durTc(pos, i);
-    $("#tc-el").textContent = durTc(pos, i);
     $("#tc-rem").textContent = durTc(Math.max(0, l.out - pos - 1), i);
+    renderPlRem(Math.max(0, l.out - pos - 1) / fpsR());
     $("#tc-dur").textContent = durTc(l.out - l.in, i);
     $("#tc-in").textContent = $("#tc-out").textContent = NO_TC;
   } else {
-    for (const id of ["#tc", "#tc-el", "#tc-rem", "#tc-in", "#tc-out", "#tc-dur"]) $(id).textContent = NO_TC;
+    for (const id of ["#tc", "#tc-rem", "#tc-in", "#tc-out", "#tc-dur"]) $(id).textContent = NO_TC;
     $("#tc-rem").classList.remove("alert", "warn");
+    renderPlRem(null);
   }
   const sd = scenes?.data;
   timeline.set(l && l.info.kind !== "image" ? {
-    length: l.info.frames, fin: l.in, fout: l.out, pos, tcStart: tcStart(),
+    length: l.info.frames, fin: l.in, fout: l.out, pos, tcStart: tcBase(),
     fps: l.info.fps, drop: l.info.drop, zoomSec: scenes && !$("#zoomwrap").classList.contains("closed") ? scenes.sideSec() : 0,
     span: sd ? [sd.from, sd.to] : null, cuts: sd ? scenes.cuts() : [],
   } : { length: 0, pos: null });
@@ -237,6 +268,7 @@ connectWs(m => {
     (m.logs?.[CH] ?? []).forEach(addLog);
     if (m.playlists?.[CH]) plui.set(m.playlists[CH]);
     if (!scenes) makeScenes();
+    S.tcMode = null; renderTcMode();
     addLogout(m.info, $(".pb-title"));
   }
   if (m.type === "playlist" && m.ch === CH) plui.set(m.playlist);
@@ -248,6 +280,7 @@ connectWs(m => {
     if (m.type === "hello") renderStatic();
   }
   if (m.type === "amcp") dot("#d-amcp", m.connected);
+  if (m.type === "tc_mode" && m.ch === CH) { S.tcMode = m.mode; renderTcMode(); }
   if (m.type === "log" && m.ch === CH) addLog(m.entry);
 }, on => dot("#d-ws", on));
 
