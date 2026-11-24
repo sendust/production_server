@@ -62,7 +62,7 @@ body { background: var(--bg); }
 .tcs .rem.warn { color: var(--warn); }
 .tcs .rem.alert { color: var(--bad); animation: blink 1s steps(1) infinite; }
 .tcs .tcsel { cursor: pointer; user-select: none; }
-.tcs #tc-lbl.el { color: #ff3b3b; }
+.tcs #tc-lbl.src { color: #ff3b3b; }
 .tcs .plrem { color: var(--cyan); }
 .tcs .plrem.off { visibility: hidden; }
 
@@ -108,14 +108,14 @@ body { background: var(--bg); }
 /* ------------------------------------------------------------- launcher */
 .lnch { display: flex; flex-direction: column; height: 100vh; width: 100%; min-width: 0; background: #2a2a2a; padding: 8px 6px; gap: 6px; overflow: hidden; }
 .lnch .logo { text-align: center; font-size: 20px; font-weight: 900; letter-spacing: .5px; color: #fff; }
-.lnch .logo small { display: block; font-size: 10px; color: var(--dim); font-weight: 600; }
+.lnch .logo small { display: block; font-size: 12px; color: var(--dim); font-weight: 600; }
+.lnch .logo .hostname { display: block; font-size: 20px; overflow-wrap: anywhere; }
 .sysbox { background: #111; border: 1px solid #000; padding: 6px 7px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
 .sysbox .r { display: flex; justify-content: space-between; gap: 4px; white-space: nowrap; }
 .sysbox .k { color: var(--dim); }
 .sysbox .ok { color: var(--ok); } .sysbox .bad { color: var(--bad); } .sysbox .warn { color: var(--warn); }
 .lnch .ubtn { width: 100%; height: 36px; font-size: 15px; }
 .lnch hr { border: 0; border-top: 1px solid #444; margin: 2px 0; width: 100%; }
-.lnch .host { text-align: center; font-weight: 700; font-size: 14px; background: #1a1a1a; padding: 4px; }
 .chbtn { height: 44px !important; font-size: 17px !important; flex-direction: column; gap: 0 !important; line-height: 1.1; border-left: 4px solid #555 !important; }
 .chbtn small { font-size: 11px; font-weight: 600; color: var(--dim); }
 .chbtn.playing { color: var(--ok); border-left-color: var(--ok) !important; }

@@ -688,7 +688,7 @@ def osd_layout(cfg: dict, name: str) -> dict:
     tcc = cfg["timecode"]
     return {"box": bool(cfg.get("box")), "name": name,
             "tc": {k: tcc[k] for k in ("x", "y", "size")},
-            "label": "TC" if tcc.get("label") else "",   # white = MXF TC, red = elapsed (view.mode)
+            "label": "TC" if tcc.get("label") else "",   # red = file TC, white = elapsed (view.mode)
             "fname": {k: cfg["filename"][k] for k in ("x", "y", "size")}}
 
 

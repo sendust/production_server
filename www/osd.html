@@ -13,8 +13,8 @@
   .item.box { background: rgba(0, 0, 0, .55); padding: .08em .3em; border-radius: .12em; text-shadow: none; }
   #tc { font-family: "DejaVu Sans Mono", "Noto Sans Mono CJK KR", monospace; font-weight: 700; letter-spacing: .02em; }
   #tc .lbl { font-size: .45em; font-weight: 400; vertical-align: .55em; margin-right: .5em; opacity: .85; }
-  #tc .lbl { color: #fff; }   /* white TC = MXF timecode */
-  #tc.elapsed .lbl { color: #ff3b3b; font-weight: 700; opacity: 1; }   /* same as the playback window */
+  #tc .lbl { color: #fff; }   /* white TC = elapsed from IN */
+  #tc.source .lbl { color: #ff3b3b; font-weight: 700; opacity: 1; }   /* red TC = file timecode, as in the playback window */
   #tc.paused { color: #ffc940; } #tc.ended { color: #ff6a5e; } #tc.empty { opacity: .5; }
   #fname { font-family: "Noto Sans CJK KR", "DejaVu Sans", sans-serif; font-weight: 500; }
 </style>
