@@ -83,7 +83,7 @@ GET http://<서버>:8300/ext/v1/<n>/status?key=<key>         → text/plain, key
 ```
 ch=1
 name=PLAY 1
-status=playing            # empty | loading | playing | paused | ended
+status=playing            # empty | loading | playing | paused | ended | offline (CasparCG 무응답)
 loop=none
 playlist_play=1
 clip=A001.mxf

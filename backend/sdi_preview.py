@@ -43,7 +43,7 @@ class SdiPreview:
         return p.osd if source == "osd" and p.osd else p.clean
 
     def _ports(self, ch: int, url: str) -> list[str]:
-        outs = self.engine.channels.get(ch, {}).get("outputs", {})
+        outs = self.engine.outputs(ch)
         return [port for port, o in outs.items() if o.get("consumer") == "ffmpeg" and o.get("file/path") == url]
 
     def state(self, p) -> dict:

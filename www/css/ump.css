@@ -59,7 +59,8 @@ body { background: var(--bg); }
 .pb .state { border-radius: 0; padding: 0; }
 .pb .state.playing { background: #123d1b; color: #5dff73; } .pb .state.paused { background: #3d2e0a; color: #ffc940; }
 .pb .state.ended { background: #4a1414; color: #ff6a5e; } .pb .state.cued { background: #0b3540; color: var(--cyan); }
-.pb .state.loading { background: #0b3540; color: var(--cyan); } .pb .state.eject { background: var(--panel); color: var(--fg); }
+.pb .state.loading { background: #0b3540; color: var(--cyan); }
+.pb .state.offline { background: #4a1414; color: #ff6a5e; font-size: 30px; animation: blink 1s steps(1) infinite; } .pb .state.eject { background: var(--panel); color: var(--fg); }
 .tcs { background: var(--panel); padding: 6px 14px; display: grid; grid-template-columns: auto 1fr auto auto; grid-template-rows: auto auto; column-gap: 10px; align-items: baseline; }
 .tcs .l { font-size: 18px; font-weight: 800; color: var(--fg); text-align: right; }
 .tcs .v { font-size: 38px; font-weight: 700; line-height: 1.1; }

@@ -14,6 +14,8 @@ import time
 
 STALE = 0.5
 KEY_STALE = 0.25  # OSC repeats every key each channel frame (~60/s)
+OUTPUT_STALE = 1.0  # a consumer (output port) not reported for this long is gone
+OFFLINE_SEC = 2.0   # a channel that sent no OSC for this long: CasparCG is down / hung
 FULL_SCALE = 2 ** 31
 
 
@@ -34,7 +36,7 @@ class Engine:
         ch = self.channels.get(n)
         if ch is None:
             ch = self.channels[n] = {"format": "", "fps": [0, 1], "volume": [], "vpeak": [], "layers": {}, "outputs": {},
-                                     "seen": 0}
+                                     "outputs_t": {}, "seen": 0}
         return ch
 
     def _layer(self, ch: dict, n: int) -> dict:
@@ -68,6 +70,7 @@ class Engine:
         elif key == "output" and len(p) >= 7 and p[4] == "port":
             out = ch["outputs"].setdefault(p[5], {})
             out["/".join(p[6:])] = args[0] if len(args) == 1 else args
+            ch["outputs_t"][p[5]] = now
         elif key == "stage" and len(p) >= 8 and p[4] == "layer" and p[5].isdigit():
             ly = self._layer(ch, int(p[5]))
             ly["seen"] = now
@@ -102,7 +105,7 @@ class Engine:
                 layers[ln] = {"fg": self._fresh(ly, "fg", now), "bg": self._fresh(ly, "bg", now)}
             out[n] = {
                 "format": ch["format"], "fps": ch["fps"], "volume": [dbfs(v) for v in ch["volume"]],
-                "layers": layers, "outputs": ch["outputs"], "alive": now - ch["seen"] < 2,
+                "layers": layers, "outputs": self.outputs(n), "alive": now - ch["seen"] < OFFLINE_SEC,
             }
         return {"channels": out, "osc_alive": now - self.osc_last < 2, "osc_rate": self.osc_rate}
 
@@ -115,6 +118,28 @@ class Engine:
             ts.pop(k, None)
             ly[side].pop(k, None)
         return ly[side]
+
+    def outputs(self, channel: int) -> dict:
+        """Consumers (output ports) of a channel that are still reported; ports of a consumer that
+        was removed -- or of a CasparCG process that is gone -- are dropped."""
+        ch = self.channels.get(channel)
+        if not ch:
+            return {}
+        now = time.monotonic()
+        for port in [k for k, t in ch["outputs_t"].items() if now - t > OUTPUT_STALE]:
+            ch["outputs_t"].pop(port, None)
+            ch["outputs"].pop(port, None)
+        return ch["outputs"]
+
+    def online(self, channel: int) -> bool:
+        """CasparCG is reporting this channel (OSC within OFFLINE_SEC)."""
+        ch = self.channels.get(channel)
+        return bool(ch) and time.monotonic() - ch["seen"] < OFFLINE_SEC
+
+    def reset(self):
+        """Forget everything (CasparCG process replaced): the new one starts with empty channels."""
+        self.channels.clear()
+        self.version += 1
 
     def layer(self, channel: int, layer: int) -> tuple[dict, dict]:
         ch = self.channels.get(channel)

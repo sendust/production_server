@@ -99,7 +99,7 @@ function renderChannels() {
   $("#chs").innerHTML = (info?.channels ?? []).map((c, i) => {
     const p = players.find(x => x.idx === c.channel_index);
     const st = p?.status ?? "empty";
-    const cls = st === "playing" ? "playing" : st === "paused" ? "paused" : st === "ended" ? "ended" : "";
+    const cls = st === "playing" ? "playing" : st === "paused" ? "paused" : st === "ended" || st === "offline" ? "ended" : "";
     const sub = st === "empty" ? "EJECT" : st.toUpperCase();
     return `<button class="ubtn chbtn ${cls}" data-idx="${c.channel_index}" data-i="${i}" title="${esc(p?.clip ?? "")}">${esc(c.name.replace(/\s+/g, "-"))}<small>${esc(sub)}</small></button>`;
   }).join("");

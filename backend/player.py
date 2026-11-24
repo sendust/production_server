@@ -135,6 +135,8 @@ class Player:
         self._img_clock = [acc, now if running else None]
 
     def status(self) -> str:
+        if not self.engine.online(self.clean):
+            return "offline"   # CasparCG down or hung: say so, keep the clip (a short OSC gap loses nothing)
         fg = self.fg()
         if not self.loaded or not fg or fg.get("producer") in (None, "empty"):
             return "empty" if not self.loaded else "loading"
@@ -146,11 +148,11 @@ class Player:
 
     def snapshot(self) -> dict:
         fg = self.fg()
-        osc_out = self.engine.channels.get(self.clean, {}).get("outputs", {})
+        osc_out = self.engine.outputs(self.clean)
         decklinks = [o.get("decklink/index") for o in osc_out.values() if o.get("consumer") == "decklink"]
         osd_dl = []
         if self.osd:
-            osd_dl = [o.get("decklink/index") for o in self.engine.channels.get(self.osd, {}).get("outputs", {}).values()
+            osd_dl = [o.get("decklink/index") for o in self.engine.outputs(self.osd).values()
                       if o.get("consumer") == "decklink"]
         return dict(
             idx=self.idx, name=self.name, clean=self.clean, osd=self.osd, layer=self.layer,
@@ -229,7 +231,7 @@ class Player:
         """Keep `loaded` consistent with CasparCG when the layer was changed outside this player
         (backend restart, another AMCP client). Skipped for 1.5 s after our own load/eject so
         stale OSC (layers linger STALE seconds) is not mistaken for a new clip."""
-        if self._adopting or time.monotonic() - self._changed_at < 1.5:
+        if self._adopting or time.monotonic() - self._changed_at < 1.5 or not self.engine.online(self.clean):
             return
         fg = self.fg()
         path = fg.get("path")
@@ -260,6 +262,16 @@ class Player:
             log.warning("adopt failed: %s", e)
         finally:
             self._adopting = False
+
+    def caspar_reset(self, why: str):
+        """CasparCG process went away / was replaced: its channels are empty, so is this player.
+        Playlist, marks, loop mode and the playlist cursor are kept."""
+        had = self.loaded["name"] if self.loaded else None
+        self.loaded = None
+        self.preloaded = None
+        self._img_run(False, reset=True)
+        self._changed_at = time.monotonic()
+        self.logmsg(f"{why}: channel cleared" + (f" (was {had})" if had else ""), "warning" if had else "info")
 
     # ---- load helpers -----------------------------------------------------------
     async def _make_loaded(self, file: str, fin: int | None, fout: int | None, item_id: str | None = None) -> dict:

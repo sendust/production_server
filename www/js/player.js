@@ -49,6 +49,7 @@ function livePos() {
 function stateWord(p) {
   const st = p?.status ?? "empty";
   if (st === "empty") return ["EJECT", "eject"];
+  if (st === "offline") return ["OFFLINE", "offline"];   // CasparCG sends nothing (down / hung)
   if (st === "loading") return ["LOAD", "loading"];
   if (st === "playing") return ["PLAY", "playing"];
   if (st === "ended") return ["END", "ended"];

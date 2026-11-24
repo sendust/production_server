@@ -148,6 +148,8 @@ class App:
         pid = getattr(self, "_caspar_pid", None)
         if pid and os.path.exists(f"/proc/{pid}"):
             return
+        if pid:   # the CasparCG process we knew is gone (crash, stop, restart)
+            self._caspar_gone(pid)
         self._caspar_pid = None
         now = time.monotonic()
         if now - getattr(self, "_caspar_scan", 0) < 5:
@@ -168,6 +170,18 @@ class App:
                 return
             except (OSError, psutil.Error):
                 continue
+
+    def _caspar_gone(self, pid: int):
+        """Bring backend + UI in line with a CasparCG that went away: every channel is empty now,
+        OSC state of the old process is dropped, OSD layers / SDI preview are re-added as soon as
+        a new CasparCG answers (osd.ensure / sdi.ensure)."""
+        log.warning("CasparCG process %d is gone: clearing channel state", pid)
+        self.engine.reset()
+        for p in self.players:
+            p.caspar_reset("CasparCG stopped")
+            p.pl_changed()
+        self.osd._last_try.clear()
+        self.sdi._last_try.clear()
 
     def sys_msg(self) -> dict:
         snap = self.engine.snapshot()
@@ -204,11 +218,13 @@ class App:
             self.osc_transport.close()
 
     async def _tick(self):
-        last = -1
+        last, last_t = -1, 0.0
         while True:
             await asyncio.sleep(1 / TICK_HZ)
-            if self.engine.version != last or not self.engine.osc_last:
-                last = self.engine.version
+            now = time.monotonic()
+            # on every OSC change, and at least every 0.5 s so a silent CasparCG shows up as offline
+            if self.engine.version != last or not self.engine.osc_last or now - last_t >= 0.5:
+                last, last_t = self.engine.version, now
                 for p in self.players:
                     asyncio.create_task(p.on_tick())
                 await self.hub.broadcast(self.tick_msg())
