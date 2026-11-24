@@ -95,6 +95,8 @@ body { background: var(--bg); }
 .lt .sp { flex: 1; }
 .lt2 { display: flex; align-items: center; gap: 12px; padding: 3px 8px; background: var(--panel); font-size: 14px; flex: none; }
 .lt2 .name { font-size: 17px; font-weight: 700; }
+.lt2 .loopgrp { margin-left: 48px; }   /* clear gap after "Playlist play" */
+.lt2 .pltotal { font-size: 18px; font-weight: 700; color: var(--fg); }
 .lt2 .sp { flex: 1; }
 
 .pb .listwrap { flex: 1; min-height: 120px; border: 0; border-radius: 0; background: var(--list); }
