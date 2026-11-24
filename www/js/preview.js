@@ -31,7 +31,9 @@ player.setLowres(quality);
 const vol = Number(store.get("pv.vol", 0.8));
 $("#pv-vol").value = String(vol);
 player.setVolume(vol);
-const workersReady = player.setWorkers(Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 2)));
+// Chrome opens at most 6 HTTP connections per server for ALL windows together: 3 decoder workers
+// (one Range fetch each) leave room for the playback / browser windows' API calls
+const workersReady = player.setWorkers(Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 2)));
 
 const meter = new Meter($("#pv-meter"));
 const timeline = new Timeline($("#timeline"), {

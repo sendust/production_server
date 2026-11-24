@@ -3,11 +3,25 @@
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
-export async function api(path, body) {
+export async function api(path, body, { timeout = 0 } = {}) {
   const opt = body === undefined ? {} : {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}),
   };
-  const r = await fetch(`/api/v1/${path}`, opt);
+  let timer = null;
+  if (timeout) {
+    const ac = new AbortController();
+    opt.signal = ac.signal;
+    timer = setTimeout(() => ac.abort(), timeout);
+  }
+  let r;
+  try {
+    r = await fetch(`/api/v1/${path}`, opt);
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`응답 없음 (${timeout / 1000}s) — 다시 시도하세요`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const d = j.detail;

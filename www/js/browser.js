@@ -393,7 +393,7 @@ function probeVisible(p) {
   pump();
 }
 function pump() {
-  while (probing < 3 && probeQ.length) {
+  while (probing < 2 && probeQ.length) {   // keep browser connections (6 per server, all windows) free
     const path = probeQ.shift(); probing++;
     api(`media/probe?file=${encodeURIComponent(path)}`).then(r => probeCache.set(path, r)).catch(() => probeCache.set(path, "error"))
       .finally(() => { probing--; clearTimeout(pump.t); pump.t = setTimeout(() => media.paint(), 150); pump(); });

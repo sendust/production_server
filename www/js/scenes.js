@@ -55,9 +55,14 @@ export class Scenes {
     this.range.value = r;
     this.busy = true;
     $("#sc-run").disabled = true;
-    $("#sc-info").textContent = "분석 중…";
+    const t0 = performance.now();
+    const tick = () => { $("#sc-info").textContent = `분석 중… ${((performance.now() - t0) / 1000).toFixed(0)}s`; };
+    tick();
+    const timer = setInterval(tick, 500);
     try {
-      const d = await api("media/scenes", { file: ld.file, frame: f, before: r, after: r });
+      // a request stuck in the browser (all connections to the server busy, network stall) must not
+      // leave the strip "analysing" forever
+      const d = await api("media/scenes", { file: ld.file, frame: f, before: r, after: r }, { timeout: 30000 });
       if (this.h.loaded()?.file !== ld.file) return;   // another clip was loaded meanwhile
       this.data = d;
       this.key = null;
@@ -65,6 +70,7 @@ export class Scenes {
       $("#sc-info").textContent = "";
       toast(`scene: ${e.message}`);
     } finally {
+      clearInterval(timer);
       this.busy = false;
       $("#sc-run").disabled = false;
     }
@@ -145,7 +151,7 @@ export class Scenes {
     head.hidden = pos == null || pos < d.from || pos > d.to;
     if (!head.hidden) head.style.left = `${(pos - d.from + 0.5) * slot}px`;
     const cuts = this.cuts();
-    $("#sc-info").textContent = `${this.tc(d.from)} – ${this.tc(d.to)} · 컷 ${cuts.length}개 · ${d.elapsed}s`;
+    if (!this.busy) $("#sc-info").textContent = `${this.tc(d.from)} – ${this.tc(d.to)} · 컷 ${cuts.length}개 · ${d.elapsed}s`;
     this._draw(cuts);
   }
 

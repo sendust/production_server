@@ -357,8 +357,11 @@ async def media_scenes(b: ScenesReq):
         r = await scenes_mod.analyse(app_state.media.abs(b.file), info, b.frame, b.before, b.after)
         r["file"] = b.file
         r["elapsed"] = round(time.monotonic() - t0, 2)
+        log.info("scenes %s frame %d -> %d frames, %d cuts>=0.3 in %.2fs", b.file, b.frame, len(r["frames"]),
+                 sum(1 for _, s in r["frames"] if s >= 0.3), r["elapsed"])
         return r
     except (ValueError, OSError, RuntimeError, scenes_mod.SceneError) as e:
+        log.warning("scenes %s frame %d failed: %s", b.file, b.frame, e)
         raise HTTPException(400, str(e))
 
 
