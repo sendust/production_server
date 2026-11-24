@@ -50,7 +50,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | `browser.lower_root` | 미디어 브라우저 아래 판넬 시작 경로 (기본 `/mnt`) |
 | `shared_playlist_path` | 공유 플레이리스트 A~D 저장 폴더 (호스트 간 공유 경로) |
 | `playlist.image_sec` | 이미지 항목 기본 길이(초) |
-| `osd.enabled`, `osd.offset_frames`, `osd.box` | OSD 사용, TC 지연 보정(프레임), 반투명 배경 |
+| `osd.enabled`, `osd.update_frames`, `osd.offset_frames`, `osd.box` | OSD 사용, 갱신 주기(프레임, 기본 4), TC 지연 보정(프레임), 반투명 배경 |
 | `osd.timecode` | `enabled`, `mode`(`elapsed`/`remaining`/`source`), `label`, `x`, `y`, `size` (화면 비율) |
 | `osd.filename` | `enabled`, `x`, `y`, `size` |
 | `zoom_timeline.seconds` | 확대 타임라인 기본 ±초 |

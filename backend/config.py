@@ -29,6 +29,7 @@ DEFAULTS = {
     "shared_playlist_path": "/mnt/storage1",
     "osd": {
         "enabled": True,
+        "update_frames": 4,   # overlay redraw / feed interval in source frames
         "offset_frames": 1,   # added to the displayed TC while playing; 1 measured on nagoya1 (overlay is 1 frame late)
         "box": True,          # semi-transparent background behind texts
         "timecode": {"enabled": True, "mode": "elapsed", "label": True, "x": 0.05, "y": 0.86, "size": 0.05},

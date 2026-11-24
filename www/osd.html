@@ -65,8 +65,19 @@ function applyCfg() {
   $("tc").querySelector(".lbl").textContent = cfg.timecode.label ? { elapsed: "EL", remaining: "REM", source: "TC" }[cfg.timecode.mode] : "";
 }
 
+// Redrawn every `update_frames` source frames (default 4) instead of every frame, to keep the
+// CEF overlay cheap; state changes (pause, seek, new clip) are drawn as soon as they arrive.
+let timer = null;
+function period() {
+  const fps = d?.fps ? d.fps[0] / d.fps[1] : 30000 / 1001;
+  return Math.max(1, cfg?.update_frames || 4) / fps * 1000;
+}
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(() => { frame(); schedule(); }, period());
+}
+
 function frame() {
-  requestAnimationFrame(frame);
   if (!cfg) return;
   const tcEl = $("tc"), fnEl = $("fname");
   const has = d && d.file;
@@ -96,13 +107,17 @@ function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws/osd?ch=${CH}`);
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.type === "cfg") { cfg = m.osd; applyCfg(); }
-    else if (m.type === "pos") { d = m; recv = performance.now() - (m.age || 0) * 1000; }
+    if (m.type === "cfg") { cfg = m.osd; applyCfg(); frame(); schedule(); }
+    else if (m.type === "pos") {
+      const changed = !d || d.status !== m.status || d.file !== m.file || d.fin !== m.fin || d.fout !== m.fout ||
+                      (m.status !== "playing" && d.pos !== m.pos);
+      d = m; recv = performance.now() - (m.age || 0) * 1000;
+      if (changed) frame();   // pause / seek / load: show it now, not at the next tick
+    }
   };
   ws.onclose = () => { d = null; setTimeout(connect, 1000); };
 }
 connect();
-requestAnimationFrame(frame);
 </script>
 </body>
 </html>

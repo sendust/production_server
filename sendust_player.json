@@ -22,6 +22,7 @@
 
   "osd": {
     "enabled": true,
+    "update_frames": 4,
     "offset_frames": 1,
     "box": true,
     "timecode": { "enabled": true, "mode": "elapsed", "label": true, "x": 0.05, "y": 0.86, "size": 0.05 },

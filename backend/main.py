@@ -606,7 +606,8 @@ def osd_payload(p: Player) -> dict:
 
 @api.websocket("/ws/osd")
 async def ws_osd(ws: WebSocket, ch: int = 0):
-    """Light feed for the CasparCG HTML overlay: config once, then player position at 25 Hz."""
+    """Light feed for the CasparCG HTML overlay: config once, then the player position every
+    osd.update_frames source frames (default 4 -> ~7.5 Hz); changes of state are sent at once."""
     if not ws_allowed(ws):
         await ws.close(code=4401)
         return
@@ -618,14 +619,18 @@ async def ws_osd(ws: WebSocket, ch: int = 0):
         return
     try:
         await ws.send_json({"type": "cfg", "osd": app_state.cfg["osd"], "name": p.name})
-        last = None
+        last, last_state, sent_at = None, None, 0.0
         while True:
             d = osd_payload(p)
-            key = (d["status"], d["pos"], d.get("file"), d.get("fin"), d.get("fout"))
-            if key != last:
-                last = key
+            state = (d["status"], d.get("file"), d.get("fin"), d.get("fout"))
+            key = (*state, d["pos"])
+            fps = d.get("fps") or [30000, 1001]
+            every = max(1, int(app_state.cfg["osd"].get("update_frames", 4))) * fps[1] / fps[0]
+            now = time.monotonic()
+            if key != last and (state != last_state or d["status"] != "playing" or now - sent_at >= every):
+                last, last_state, sent_at = key, state, now
                 await ws.send_json({"type": "pos", **d})
-            await asyncio.sleep(0.04)
+            await asyncio.sleep(0.01)
     except (WebSocketDisconnect, RuntimeError):
         pass
 
