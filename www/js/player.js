@@ -265,11 +265,35 @@ $("#btn-delout").onclick = () => loaded() && cmd("marks", { fout: loaded().info.
 $("#loopmode").onchange = e => cmd("loop", { mode: e.target.value });
 const openBrowser = () => window.open("/browser.html", "sendust_browser");
 $("#btn-browser").onclick = openBrowser;
-$("#btn-open").onclick = openBrowser;
+
+// preview area height: drag the bar under it (remembered per browser)
+const SCREEN_DEF = 290, SCREEN_MIN = 110;
+function setScreenH(h, save = true) {
+  const max = Math.max(SCREEN_MIN, window.innerHeight - 600);   // keep room for transport + a few list rows
+  h = Math.round(Math.max(SCREEN_MIN, Math.min(max, h)));
+  $("#screen").style.height = `${h}px`;
+  $(".pb").classList.toggle("short", h < 200);
+  if (save) store.set("sp.screenH", String(h));
+}
+setScreenH(Number(store.get("sp.screenH", SCREEN_DEF)), false);
+window.addEventListener("resize", () => setScreenH($("#screen").getBoundingClientRect().height, false));
+{
+  const bar = $("#vsplit");
+  bar.addEventListener("pointerdown", e => {
+    const y0 = e.clientY, h0 = $("#screen").getBoundingClientRect().height;
+    bar.setPointerCapture(e.pointerId);
+    bar.classList.add("drag");
+    const move = ev => setScreenH(h0 + ev.clientY - y0);
+    const up = () => { bar.removeEventListener("pointermove", move); bar.removeEventListener("pointerup", up); bar.classList.remove("drag"); };
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", up);
+  });
+  bar.addEventListener("dblclick", () => setScreenH(SCREEN_DEF));
+}
 
 // zoomed timeline open/close (remembered)
 const zw = $("#zoomwrap");
-const setZoom = open => { zw.classList.toggle("closed", !open); $(".pb").classList.toggle("zoom-open", open); $("#sc-toggle").textContent = open ? "SCENE ▴" : "SCENE ▾"; store.set("sp.zoomOpen", open ? "1" : "0"); };
+const setZoom = open => { zw.classList.toggle("closed", !open); $("#sc-toggle").textContent = open ? "SCENE ▴" : "SCENE ▾"; store.set("sp.zoomOpen", open ? "1" : "0"); };
 setZoom(store.get("sp.zoomOpen", "0") === "1");
 $("#sc-toggle").onclick = () => {
   const open = zw.classList.contains("closed");

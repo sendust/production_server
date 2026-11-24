@@ -26,6 +26,7 @@
     <video id="pv-video" autoplay muted playsinline hidden></video>
     <div class="live" id="pv-live" hidden></div>
   </section>
+  <div class="vsplit" id="vsplit" title="끌어서 화면 높이 조절 (더블클릭: 기본 높이)"></div>
 
   <div class="meters"><canvas id="meter"></canvas></div>
   <canvas class="tl" id="timeline"></canvas>
@@ -80,7 +81,6 @@
         <label class="chk dim"><input type="checkbox" id="sc-auto"> auto</label>
         <span class="dim mono" id="sc-info"></span>
         <span class="spacer"></span>
-        <button class="ibtn" id="sc-close" title="분석 결과 지우기">✕</button>
       </div>
       <div class="sc-box" id="sc-box">
         <canvas id="sc-canvas"></canvas>
@@ -95,6 +95,7 @@
   <section class="lt">
     <select class="uselect" id="pl-slot" title="플레이리스트 (1~9: 이 서버, A~D: 공유)"></select>
     <button class="ubtn" id="pl-load" title="선택한 리스트 불러오기">열기</button>
+    <button class="ubtn" id="pl-save" title="선택한 리스트 번호에 저장">저장</button>
     <button class="ubtn" id="pl-preview" title="VGA 프리뷰 (V)" disabled>Preview</button>
     <button class="ubtn" disabled title="준비 중">대체광고</button>
     <span class="lbl">프리셋</span>
@@ -121,10 +122,7 @@
   </section>
 
   <section class="bottom">
-    <button class="ubtn" id="pl-save" title="선택한 리스트 번호에 저장">Save</button>
-    <button class="ubtn" id="btn-open" title="미디어 브라우저 열기 (클립 추가)">Open</button>
     <button class="ubtn" id="pl-clear" title="리스트 전체 지우기">Clear</button>
-    <button class="ubtn" id="pl-export" title="리스트를 CSV 로 내려받기">Export</button>
     <span class="sp"></span>
     <button class="ubtn" id="pl-pause" title="선택 위치 앞에 PAUSE 라인 (P)">+</button>
     <button class="ubtn" id="pl-del" title="선택 항목 삭제 (Del)">−</button>

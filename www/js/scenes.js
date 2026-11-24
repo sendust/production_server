@@ -30,6 +30,7 @@ export class Scenes {
     this.auto.onchange = () => store.set("sp.scAuto", this.auto.checked ? "1" : "0");
     // buttons that disable/hide themselves must not take keyboard focus (shortcuts would die)
     for (const [id, fn] of [["#sc-run", () => this.run()], ["#sc-close", () => this.clear()]]) {
+      if (!$(id)) continue;   // the playback window has no ✕ (folding the strip replaces it)
       $(id).addEventListener("mousedown", e => e.preventDefault());
       $(id).onclick = () => { this.h.focus(); fn(); };
     }
