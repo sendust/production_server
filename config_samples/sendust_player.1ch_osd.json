@@ -1,0 +1,46 @@
+{
+  "title": "sendust playlist",
+  "http": { "host": "0.0.0.0", "port": 8300 },
+  "auth": false,
+  "password": "",
+  "ext_control": { "enabled": true, "key": "", "osc_port": 9250, "allow_ips": [], "aux1": "", "aux2": "" },
+  "gang": { "allow_origins": [] },
+
+  "casparcg": {
+    "host": "127.0.0.1",
+    "amcp_port": 5250,
+    "osc_port": 6250,
+    "media_path": "/mnt/raid0",
+    "template_path": "/mnt/raid0/template",
+    "video_layer": 10,
+    "osd_route_layer": 10,
+    "osd_overlay_layer": 20
+  },
+
+  "browser": { "lower_root": "/mnt", "favorites": [] },
+  "shared_playlist_path": "/mnt/storage1",
+
+  "osd": {
+    "enabled": true,
+    "update_frames": 4,
+    "offset_frames": 1,
+    "box": true,
+    "timecode": { "enabled": true, "mode": "elapsed", "label": true, "x": 0.05, "y": 0.86, "size": 0.05 },
+    "filename": { "enabled": true, "x": 0.05, "y": 0.06, "size": 0.03 }
+  },
+
+  "zoom_timeline": { "seconds": 5 },
+  "playlist": { "image_sec": 10 },
+
+  "sdi_preview": {
+    "rtsp_base": "rtsp://127.0.0.1:8554",
+    "path_prefix": "sendust_ch",
+    "webrtc_port": 8889,
+    "args": ""
+  },
+
+  "total_sdi_consumer": 2,
+  "channels": [
+    { "channel_index": 0, "name": "PLAY 1", "clean_out": 1, "osd_out": 2, "tc_mode": "source" }
+  ]
+}

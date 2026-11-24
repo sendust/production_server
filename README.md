@@ -47,6 +47,7 @@ chrome.exe --app=http://<서버>:8300/launcher.html          # Windows 바로가
 ## 설정 `sendust_player.json`
 
 없는 키는 `backend/config.py` 의 기본값을 쓴다.
+샘플: `config_samples/` (재생 1채널 + OSD, 재생 3채널 OSD 없음).
 
 | 키 | 의미 |
 |---|---|
