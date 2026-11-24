@@ -50,12 +50,32 @@ class Hub:
 
     def __init__(self):
         self.clients: set[WebSocket] = set()
+        self.meta: dict[WebSocket, dict] = {}   # ws -> {ip, page, ch, since} (log viewer client list)
+
+    def add(self, ws: WebSocket, ip: str, page: str, ch: str | None):
+        self.clients.add(ws)
+        self.meta[ws] = {"ip": ip, "page": page, "ch": ch, "since": time.time()}
+        self._clients_changed()
+
+    def drop(self, ws: WebSocket):
+        self.clients.discard(ws)
+        if self.meta.pop(ws, None) is not None:
+            self._clients_changed()
+
+    def client_list(self) -> list[dict]:
+        return sorted(self.meta.values(), key=lambda m: (m["ip"], m["since"]))
+
+    def _clients_changed(self):
+        try:
+            asyncio.get_running_loop().create_task(self.broadcast({"type": "clients", "clients": self.client_list()}))
+        except RuntimeError:
+            pass
 
     async def send(self, ws: WebSocket, msg: dict):
         try:
             await ws.send_text(json.dumps(msg, separators=(",", ":")))
         except Exception:
-            self.clients.discard(ws)
+            self.drop(ws)
 
     async def broadcast(self, msg: dict):
         if self.clients:
@@ -64,7 +84,7 @@ class Hub:
                 try:
                     await ws.send_text(text)
                 except Exception:
-                    self.clients.discard(ws)
+                    self.drop(ws)
 
 
 class JsonStore:
@@ -765,13 +785,13 @@ async def ws_endpoint(ws: WebSocket):
         return
     await ws.accept()
     hub = app_state.hub
-    hub.clients.add(ws)
+    hub.add(ws, client_ip(ws), ws.query_params.get("page", "?")[:20], ws.query_params.get("ch"))
     hello = app_state.tick_msg()
     hello.update(type="hello", info=app_state.info(),
                  logs={p.idx: list(p.logs)[-50:] for p in app_state.players},
                  playlists={p.idx: p.pl.view() for p in app_state.players},
                  jobs=app_state.jobs.list(), favorites=app_state.favorites.data,
-                 sys=app_state.sys_msg(), syslog=app_state.loghub.recent(300))
+                 sys=app_state.sys_msg(), syslog=app_state.loghub.recent(300), clients=hub.client_list())
     await hub.send(ws, hello)
     try:
         while True:
@@ -779,7 +799,7 @@ async def ws_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        hub.clients.discard(ws)
+        hub.drop(ws)
 
 
 @api.get("/media/{path:path}")

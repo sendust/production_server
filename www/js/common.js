@@ -35,7 +35,10 @@ export async function api(path, body, { timeout = 0 } = {}) {
 export function connectWs(onMsg, onState) {
   let ws, timer;
   const open = () => {
-    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    // page + channel tell the backend who this is (log viewer's client list)
+    const page = (location.pathname.split("/").pop() || "launcher.html").replace(/\.html$/, "");
+    const ch = new URLSearchParams(location.search).get("ch");
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?page=${encodeURIComponent(page)}${ch != null ? `&ch=${encodeURIComponent(ch)}` : ""}`);
     ws.onopen = () => onState?.(true);
     ws.onmessage = e => onMsg(JSON.parse(e.data));
     ws.onclose = () => { onState?.(false); clearTimeout(timer); timer = setTimeout(open, 1000); };

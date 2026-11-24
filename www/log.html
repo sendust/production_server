@@ -12,6 +12,12 @@
   .lg { display: flex; flex-direction: column; height: 100vh; }
   .lg-title { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: #111; border-bottom: 1px solid var(--line); flex: none; }
   .lg-title .t { font-size: 18px; font-weight: 700; }
+  .lg-clients { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; background: #181818; border-bottom: 1px solid var(--line); font-size: 13px; flex: none; }
+  .lg-clients .k { color: var(--dim); font-weight: 700; }
+  .lg-clients .cl { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 8px; background: #23282e; border: 1px solid var(--line); border-radius: 4px; }
+  .lg-clients .ip { font-family: var(--mono); font-weight: 700; color: var(--cyan); }
+  .lg-clients .pg { color: var(--fg); }
+  .lg-clients .me { color: var(--ok); font-size: 11px; }
   .lg-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: #1f1f1f; border-bottom: 1px solid var(--line); flex: none; font-size: 14px; }
   .lg-bar select, .lg-bar input[type=search] { height: 30px; background: #2a3037; color: var(--fg); border: 1px solid var(--btn-edge); border-radius: 4px; padding: 0 6px; }
   .lg-bar input[type=search] { width: 240px; }
@@ -28,6 +34,7 @@
 <body>
 <div class="lg">
   <header class="lg-title"><span class="t">Log Viewer</span><span class="sp"></span><span class="dim mono" id="count"></span></header>
+  <div class="lg-clients" id="clients"><span class="k">접속 클라이언트</span><span class="dim">-</span></div>
   <div class="lg-bar">
     <label>Source <select id="f-src"><option value="">All</option></select></label>
     <label>Level <select id="f-lvl"><option value="">All</option><option value="WARNING">Warning +</option><option value="ERROR">Error</option></select></label>
@@ -86,8 +93,30 @@ for (const id of ["#f-src", "#f-lvl", "#f-amcp"]) $(id).onchange = renderAll;
 $("#f-txt").oninput = renderAll;
 $("#b-clear").onclick = () => { clearedAt = Date.now() / 1000; renderAll(); };
 
+// connected clients, one chip per IP: "10.10.108.50  런처 · PLAY 1 · PLAY 2"
+let chNames = {};
+const PAGES = { "?": "(새로고침 필요)", launcher: "런처", player: "PLAY", browser: "미디어 브라우저", log: "로그", preview: "VGA 프리뷰", sdi: "SDI 프리뷰", status: "상태" };
+function pageName(c) {
+  if (c.page === "player" || c.page === "preview" || c.page === "sdi") {
+    const n = chNames[c.ch] ?? `CH ${c.ch ?? "?"}`;
+    return c.page === "player" ? n : `${PAGES[c.page]} ${n}`;
+  }
+  return PAGES[c.page] ?? c.page;
+}
+function renderClients(list) {
+  const by = new Map();
+  for (const c of list) { if (!by.has(c.ip)) by.set(c.ip, []); by.get(c.ip).push(c); }
+  const fmt = t => new Date(t * 1000).toLocaleTimeString("ko-KR", { hour12: false });
+  $("#clients").innerHTML = `<span class="k">접속 클라이언트 ${by.size}</span>` + ([...by].map(([ip, cs]) =>
+    `<span class="cl" title="${esc(cs.map(c => `${pageName(c)} — 접속 ${fmt(c.since)}`).join("\n"))}"><span class="ip">${esc(ip)}</span>` +
+    `<span class="pg">${esc(cs.map(pageName).join(" · "))}</span></span>`).join("") || `<span class="dim">없음</span>`);
+}
+
 connectWs(m => {
+  if (m.type === "clients") renderClients(m.clients);
   if (m.type === "hello") {
+    chNames = Object.fromEntries(m.info.channels.map(c => [String(c.channel_index), c.name]));
+    renderClients(m.clients || []);
     document.title = `${m.info.title} [Log] {${m.info.stamp}}`;
     $("#host").textContent = m.info.host;
     rows = (m.syslog || []).slice();
