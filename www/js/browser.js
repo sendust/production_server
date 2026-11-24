@@ -452,3 +452,39 @@ connectWs(async m => {
   }
   if (m.type === "fs") panes.forEach(p => { if (p.root === m.root && p.dir === m.dir) p.open(p.dir, true); });
 }, on => dot("#d-ws", on));
+
+
+// ---------------------------------------------------------------- pane heights
+// The three panels (CasparCG media / favourite / transfer status) are separated by two drag bars.
+// Heights are kept as flex-grow weights (= px at the time of the drag), so the split stays
+// proportional when the window is resized; remembered per browser, double-click = default.
+{
+  const panes = [$("#pane-media"), $("#pane-fav"), $(".xfers")];
+  const MIN = 90, KEY = "sp.ubPanes";
+  const apply = hs => panes.forEach((p, i) => { p.style.flex = hs ? `${hs[i]} 1 0` : ""; });
+  try { const hs = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(hs) && hs.length === 3) apply(hs); } catch { /* none */ }
+  for (const bar of $$(".ub > .vsplit")) {
+    const k = Number(bar.dataset.split);   // between panes[k] and panes[k + 1]
+    bar.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      const hs = panes.map(p => p.getBoundingClientRect().height), y0 = e.clientY;
+      const pair = hs[k] + hs[k + 1];
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add("drag");
+      const move = ev => {
+        const a = Math.max(MIN, Math.min(pair - MIN, hs[k] + ev.clientY - y0));
+        const cur = [...hs]; cur[k] = a; cur[k + 1] = pair - a;
+        apply(cur);
+        bar._hs = cur;
+      };
+      const up = () => {
+        bar.removeEventListener("pointermove", move); bar.removeEventListener("pointerup", up);
+        bar.classList.remove("drag");
+        if (bar._hs) try { localStorage.setItem(KEY, JSON.stringify(bar._hs.map(Math.round))); } catch { /* private mode */ }
+      };
+      bar.addEventListener("pointermove", move);
+      bar.addEventListener("pointerup", up);
+    });
+    bar.addEventListener("dblclick", () => { apply(null); try { localStorage.removeItem(KEY); } catch { /* */ } });
+  }
+}

@@ -6,7 +6,7 @@
 .ub-title .sp { flex: 1; }
 .ub-title .dots { display: flex; gap: 8px; font-size: 11px; color: var(--dim); }
 
-.pane { flex: 1 1 0; min-height: 160px; display: flex; flex-direction: column; position: relative; border-bottom: 2px solid #111; }
+.pane { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; position: relative; border-bottom: 2px solid #111; }
 .pane.active .pane-head { background: #232a31; }
 .pane-head { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #1f1f1f; border-bottom: 1px solid var(--line); flex: none; }
 .plabel { font-size: 17px; font-weight: 800; }
@@ -49,7 +49,7 @@
 .pane.dragover .dropmask { display: flex; }
 .pane.dragtarget { box-shadow: inset 0 0 0 2px var(--ok); }
 
-.xfers { flex: 0 0 230px; display: flex; flex-direction: column; min-height: 0; background: #1b1b1b; }
+.xfers { flex: 0 0 230px; min-height: 0; display: flex; flex-direction: column; min-height: 0; background: #1b1b1b; }
 .xhead { display: flex; align-items: center; padding: 4px 8px 0; border-bottom: 1px solid var(--line); }
 .xhead .tab { font-size: 16px; font-weight: 800; padding: 5px 14px; background: #2a2a2a; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; }
 .xfers .list { flex: 1; overflow: auto; }
