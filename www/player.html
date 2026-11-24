@@ -5,116 +5,141 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sendust playlist</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ump.css">
 </head>
 <body>
-<div class="app">
-  <header class="top">
-    <span class="chname" id="chname">PLAY</span>
+<div class="pb">
+  <!-- title bar -->
+  <header class="pb-title">
+    <span class="name" id="chname">PLAY</span>
     <span class="route" id="route"></span>
-    <span class="conn">
-      <span><i class="dot" id="d-ws"></i>WS</span>
-      <span><i class="dot" id="d-amcp"></i>AMCP</span>
-      <span><i class="dot" id="d-osc"></i>OSC</span>
-      <button class="linkbtn" id="btn-sdi" title="SDI 프리뷰 (WebRTC) 창 열기 — 창에서 켜고 끕니다">SDI Preview</button>
-      <button class="linkbtn" id="btn-browser" title="미디어 브라우저 창 열기">Media Browser</button>
-    </span>
+    <span class="sp"></span>
+    <label class="uchk" title="송출 채널을 저지연(WebRTC)으로 보기 — CasparCG ffmpeg consumer 를 추가합니다 (CPU 약 3~4코어)">
+      <input type="checkbox" id="pv-enable"> Preview</label>
+    <button class="ubtn sm" id="btn-browser" title="미디어 브라우저">Media</button>
+    <span class="dots"><span><i class="dot" id="d-ws"></i>WS</span><span><i class="dot" id="d-amcp"></i>AMCP</span><span><i class="dot" id="d-osc"></i>OSC</span></span>
   </header>
 
-  <section class="panel info">
-    <div class="fname" id="fname">—</div>
-    <div class="state" id="state">empty</div>
-    <div class="meta" id="meta"></div>
+  <!-- clip info (big) or low-latency SDI preview -->
+  <section class="screen" id="screen">
+    <div class="info empty" id="info"><div class="fn">NO CLIP</div></div>
+    <video id="pv-video" autoplay muted playsinline hidden></video>
+    <div class="live" id="pv-live" hidden></div>
   </section>
 
-  <section class="panel transport">
-    <div class="grp">
-      <button class="tbtn danger" data-act="eject" title="Eject (clear layer)"><svg viewBox="0 0 24 24"><path d="M12 5l7 9H5zM5 16h14v3H5z"/></svg>EJECT</button>
-    </div>
-    <span class="sep"></span>
-    <div class="grp">
-      <button class="tbtn" data-act="top" title="Go to IN / top (Home)"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>TOP</button>
-      <button class="tbtn" data-step="-1s" title="-1 s (Shift+←, J)"><svg viewBox="0 0 24 24"><path d="M12 6v12L3 12zM21 6v12l-9-6z"/></svg>1s</button>
-      <button class="tbtn" data-step="-1" title="-1 frame (←)"><svg viewBox="0 0 24 24"><path d="M16 6v12L7 12z"/></svg>1f</button>
-      <button class="tbtn play" id="btn-play" data-act="toggle" title="Play / Pause (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg><span>PLAY</span></button>
-      <button class="tbtn" data-step="1" title="+1 frame (→)">1f<svg viewBox="0 0 24 24"><path d="M8 6v12l9-6z"/></svg></button>
-      <button class="tbtn" data-step="1s" title="+1 s (Shift+→, L when paused)">1s<svg viewBox="0 0 24 24"><path d="M3 6v12l9-6zM12 6v12l9-6z"/></svg></button>
-    </div>
-    <span class="sep"></span>
-    <div class="grp">
-      <button class="tbtn in" data-act="mark_in" title="Mark IN (I)">IN</button>
-      <button class="tbtn out" data-act="mark_out" title="Mark OUT (O)">OUT</button>
-      <button class="tbtn" id="btn-goin" title="Go to IN (Ctrl+I)">→IN</button>
-      <button class="tbtn" id="btn-goout" title="Go to OUT (Ctrl+O)">→OUT</button>
-      <button class="tbtn" data-act="clear_marks" title="Clear IN/OUT">CLR</button>
-    </div>
-    <span class="sep"></span>
-    <label>Loop
-      <select id="loopmode" title="Loop play">
-        <option value="none">none</option>
-        <option value="single">single</option>
-        <option value="playlist">playlist</option>
-      </select>
-    </label>
-  </section>
+  <div class="meters"><canvas id="meter"></canvas></div>
+  <canvas class="tl" id="timeline"></canvas>
 
-  <canvas class="tl panel" id="timeline"></canvas>
-  <section class="panel zoom">
-    <div class="zoombar">
-      <button class="ibtn" id="sc-run" title="playhead 앞뒤 ±N초의 장면 전환 + 오디오 peak 분석 ( / )">✂ SCENE</button>
-      <label class="dim">± <input id="sc-range" type="number" min="1" max="30" step="1" title="분석 범위 (초, 앞뒤 각각)"> s</label>
-      <label class="dim" title="컷으로 볼 scene 점수">thr <input id="sc-th" type="range" min="0.05" max="1" step="0.01"> <span class="mono" id="sc-th-v"></span></label>
-      <label class="chk dim" title="일시정지 위치가 분석 구간 밖이면 자동으로 다시 분석"><input type="checkbox" id="sc-auto"> auto</label>
-      <span class="dim mono" id="sc-info"></span>
-      <span class="spacer"></span>
-      <span class="dim keyhint">1-9 컷 · Shift+1-9 컷 직전 · Ctrl+←/→ 이전/다음 컷</span>
-      <button class="ibtn" id="sc-close" title="닫기">✕</button>
-    </div>
-    <div class="sc-box" id="sc-box">
-      <canvas id="sc-canvas"></canvas>
-      <div id="sc-head" hidden></div>
-      <div id="sc-hover" hidden></div>
-      <div id="sc-empty" class="dim">/ 키 또는 ✂ SCENE: playhead 주변 장면 전환과 오디오 peak 를 프레임 단위로 표시</div>
+  <!-- state + timecode -->
+  <section class="tcblk">
+    <div class="state eject" id="state">EJECT</div>
+    <div class="tcs">
+      <span class="l">TC</span><span class="v tcv" id="tc">--:--:--;--</span>
+      <span class="l">/ DUR</span><span class="v tcv" id="tc-dur">--:--:--;--</span>
+      <span class="l">EL</span><span class="v tcv" id="tc-el" style="font-size:24px;color:var(--dim)">--:--:--;--</span>
+      <span class="l">REM</span><span class="v tcv rem" id="tc-rem">--:--:--;--</span>
     </div>
   </section>
 
-  <section class="panel tcrow">
-    <div class="tcbox"><span class="lbl">Timecode</span><span class="tc-main" id="tc">--:--:--:--</span></div>
-    <div class="tcbox"><span class="lbl">Elapsed</span><span class="v" id="tc-el">--</span></div>
-    <div class="tcbox rem" id="box-rem"><span class="lbl">Remaining</span><span class="v" id="tc-rem">--</span></div>
-    <div class="tcbox in"><span class="lbl">In</span><span class="v" id="tc-in">--</span></div>
-    <div class="tcbox out"><span class="lbl">Out</span><span class="v" id="tc-out">--</span></div>
-    <div class="tcbox"><span class="lbl">Duration</span><span class="v" id="tc-dur">--</span></div>
-    <div class="tcbox plinfo hidden" id="box-pl"><span class="lbl">Playlist</span><span class="v" id="tc-pl">--</span></div>
+  <!-- IN / OUT -->
+  <section class="inout">
+    <div class="in"><span class="l">IN</span><span class="v tcv" id="tc-in">--:--:--;--</span>
+      <button class="ubtn sm" data-act="mark_in" title="현재 위치를 IN (I)">In</button>
+      <button class="ubtn sm" id="btn-goin" title="IN 으로 이동 (Ctrl+I)">Go</button>
+      <button class="ubtn sm" id="btn-delin" title="IN 해제">Del</button></div>
+    <div class="out"><span class="l">OUT</span><span class="v tcv" id="tc-out">--:--:--;--</span>
+      <button class="ubtn sm" data-act="mark_out" title="현재 위치를 OUT (O)">Out</button>
+      <button class="ubtn sm" id="btn-goout" title="OUT 으로 이동 (Ctrl+O)">Go</button>
+      <button class="ubtn sm" id="btn-delout" title="OUT 해제">Del</button></div>
   </section>
 
-  <section class="panel"><canvas class="meter" id="meter"></canvas></section>
+  <!-- transport -->
+  <section class="trans">
+    <button class="ubtn cyan" id="pl-cue" title="플레이리스트에서 선택한 클립을 CasparCG 에 로드 (Enter)">CUE</button>
+    <span class="sp"></span>
+    <button class="ubtn" data-act="top" title="IN 으로 (Home)"><svg viewBox="0 0 24 24"><path d="M5 5h3v14H5zM20 5v14L9 12z"/></svg></button>
+    <button class="ubtn" data-step="-1" title="-1 프레임 (←)">-1</button>
+    <button class="ubtn" data-step="-1s" title="-1 초 (Shift+←)"><svg viewBox="0 0 24 24"><path d="M12 6v12L3 12zM21 6v12l-9-6z"/></svg></button>
+    <button class="ubtn play" id="btn-play" data-act="play" title="재생 (Space)"><svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+    <button class="ubtn pause" id="btn-pause" data-act="pause" title="일시정지 (Space / K)"><svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
+    <button class="ubtn" data-step="1s" title="+1 초 (Shift+→)"><svg viewBox="0 0 24 24"><path d="M3 6v12l9-6zM12 6v12l9-6z"/></svg></button>
+    <button class="ubtn" data-step="1" title="+1 프레임 (→)">+1</button>
+    <button class="ubtn" id="btn-end" title="OUT 직전 프레임으로 (End)"><svg viewBox="0 0 24 24"><path d="M16 5h3v14h-3zM4 5v14l11-7z"/></svg></button>
+    <span class="sp"></span>
+    <button class="ubtn" data-act="eject" title="EJECT (레이어 비우기)">EJECT</button>
+  </section>
+  <section class="jog">
+    <label class="uchk"><input type="radio" name="jogmode" value="jog" checked> Jog</label>
+    <label class="uchk"><input type="radio" name="jogmode" value="shuttle"> Shuttle</label>
+    <input type="range" id="jog" min="-100" max="100" value="0" title="Jog: 끌어서 프레임 이동 · Shuttle: 끌어서 속도 (놓으면 정지)">
+    <span class="x mono" id="jog-x">x 0</span>
+    <button class="ubtn sm" id="sc-toggle" title="확대 타임라인 (장면전환 + 오디오 peak) 열기/닫기">SCENE ▾</button>
+  </section>
 
-  <section class="panel listwrap" id="plwrap">
-    <div class="listhead pltools">
-      <label class="chk" title="플레이리스트 연속 재생"><input type="checkbox" id="pl-enable"> Playlist play</label>
-      <span class="sep"></span>
-      <select id="pl-slot" title="플레이리스트 슬롯 (1~9: 이 서버, A~D: 공유)"></select>
-      <button class="ibtn" id="pl-save" title="선택한 슬롯에 저장">SAVE</button>
-      <button class="ibtn" id="pl-load" title="선택한 슬롯에서 불러오기">LOAD</button>
-      <span class="sep"></span>
-      <button class="ibtn" id="pl-cue" title="선택한 클립을 CasparCG 에 로드 (Enter / 더블클릭)">CUE ▸</button>
-      <button class="ibtn" id="pl-pause" title="선택 위치 앞에 PAUSE 라인 삽입 (P)">+ PAUSE</button>
-      <button class="ibtn" id="pl-preview" title="VGA 프리뷰 (V)" disabled>PREVIEW</button>
-      <button class="ibtn danger" id="pl-del" title="선택 항목 삭제 (Del)">DEL</button>
-      <button class="ibtn danger" id="pl-clear" title="전체 삭제">CLEAR</button>
-      <span class="spacer"></span>
-      <span class="dim mono" id="pl-total"></span>
+  <!-- zoomed timeline (collapsible) -->
+  <section class="zoomwrap closed" id="zoomwrap">
+    <div class="zoom-body zoom">
+      <div class="zoombar">
+        <button class="ibtn" id="sc-run" title="playhead 앞뒤 ±N초 분석 ( / )">✂ SCENE</button>
+        <label class="dim">± <input id="sc-range" type="number" min="1" max="30" step="1"> s</label>
+        <label class="dim">thr <input id="sc-th" type="range" min="0.05" max="1" step="0.01"> <span class="mono" id="sc-th-v"></span></label>
+        <label class="chk dim"><input type="checkbox" id="sc-auto"> auto</label>
+        <span class="dim mono" id="sc-info"></span>
+        <span class="spacer"></span>
+        <button class="ibtn" id="sc-close" title="분석 결과 지우기">✕</button>
+      </div>
+      <div class="sc-box" id="sc-box">
+        <canvas id="sc-canvas"></canvas>
+        <div id="sc-head" hidden></div>
+        <div id="sc-hover" hidden></div>
+        <div id="sc-empty" class="dim">/ 키 또는 ✂ SCENE · 1-9 컷 · Shift+1-9 컷 직전 · Ctrl+←/→</div>
+      </div>
     </div>
+  </section>
+
+  <!-- list tools -->
+  <section class="lt">
+    <select class="uselect" id="pl-slot" title="플레이리스트 (1~9: 이 서버, A~D: 공유)"></select>
+    <button class="ubtn" id="pl-load" title="선택한 리스트 불러오기">열기</button>
+    <button class="ubtn" id="pl-preview" title="VGA 프리뷰 (V)" disabled>Preview</button>
+    <button class="ubtn" disabled title="준비 중">대체광고</button>
+    <span class="lbl">프리셋</span>
+    <button class="ubtn preset mono" disabled title="준비 중">00:00:00:00</button>
+  </section>
+  <section class="lt2">
+    <label class="uchk" title="플레이리스트 연속 재생"><input type="checkbox" id="pl-enable"> Playlist play</label>
+    <label class="uchk">Loop <select class="uselect" id="loopmode" style="height:30px;font-size:14px">
+      <option value="none">none</option><option value="single">single</option><option value="playlist">playlist</option></select></label>
+    <span class="sp"></span>
+    <span class="name" id="pl-name">list1</span>
+    <span class="dim mono" id="pl-total"></span>
+    <span class="hidden" id="box-pl"><span id="tc-pl"></span></span>
+  </section>
+
+  <section class="panel listwrap">
     <div class="list pl" id="pl" tabindex="0">
       <table>
-        <thead><tr><th class="c-n">#</th><th>Name</th><th>Kind</th><th class="r">In</th><th class="r">Out</th><th class="r">Duration</th><th class="r" title="예상 송출 시각 (Playlist play 중)">On-air</th></tr></thead>
+        <thead><tr><th class="c-n">#</th><th>Name</th><th>Kind</th><th class="r">In</th><th class="r">Out</th><th class="r">Duration</th><th class="r" title="예상 송출 시각">On-air</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="pl-empty dim">미디어 브라우저에서 파일을 끌어다 놓으세요</div>
     </div>
   </section>
 
-  <section class="panel">
+  <section class="bottom">
+    <button class="ubtn" id="pl-save" title="선택한 리스트 번호에 저장">Save</button>
+    <button class="ubtn" id="btn-open" title="미디어 브라우저 열기 (클립 추가)">Open</button>
+    <button class="ubtn" id="pl-clear" title="리스트 전체 지우기">Clear</button>
+    <button class="ubtn" id="pl-export" title="리스트를 CSV 로 내려받기">Export</button>
+    <span class="sp"></span>
+    <button class="ubtn" id="pl-pause" title="선택 위치 앞에 PAUSE 라인 (P)">+</button>
+    <button class="ubtn" id="pl-del" title="선택 항목 삭제 (Del)">−</button>
+    <button class="ubtn" id="pl-up" title="위로 (Ctrl+↑)">▲</button>
+    <button class="ubtn" id="pl-down" title="아래로 (Ctrl+↓)">▼</button>
+    <button class="ubtn" id="pl-rename" title="리스트 이름 바꾸기">Rename</button>
+  </section>
+
+  <section class="pb-log">
     <div class="status" id="status"><span class="dim mono" id="status-t"></span><span class="msg" id="status-msg">ready</span><span class="dim">log ▾</span></div>
     <div class="logpane hidden" id="logpane"></div>
   </section>

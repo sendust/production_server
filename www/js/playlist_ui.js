@@ -40,9 +40,12 @@ export class PlaylistUI {
       const saved = pl.slots?.[s];
       const shared = /[A-D]/.test(s);
       const when = saved ? new Date(saved.mtime * 1000).toLocaleString("ko-KR", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "empty";
-      return `<option value="${s}">${shared ? "Shared " : "List "}${s} · ${when}</option>`;
+      const nm = saved?.name ? ` ${saved.name}` : "";
+      return `<option value="${s}">${shared ? "공유 " : ""}${s}${nm} · ${when}</option>`;
     }).join("");
     slotSel.value = pl.slot;
+    const nameEl = $("#pl-name");
+    if (nameEl) nameEl.textContent = pl.name || "";
     this.render();
   }
 
@@ -120,6 +123,23 @@ export class PlaylistUI {
     box.classList.remove("hidden");
     $("#tc-pl").textContent = `${nth}/${clips.length} · ${secTc(remain)}`;
     box.title = pl.enabled ? "현재 클립 번호/전체 · 다음 PAUSE 또는 끝까지 남은 시간" : "Playlist play OFF: 현재 클립만";
+  }
+
+  exportCsv() {
+    const rows = [["#", "type", "file", "in_tc", "out_tc", "duration_tc", "in_frame", "out_frame"]];
+    let n = 0;
+    for (const it of this.pl.items) {
+      if (it.type === "pause") { rows.push(["", "PAUSE", "", "", "", "", "", ""]); continue; }
+      const ts = tcToFrames(it.tc_start || "00:00:00:00", it.fps) ?? 0;
+      rows.push([++n, it.kind, it.file, framesToTc(ts + it.in, it.fps, it.drop), framesToTc(ts + it.out, it.fps, it.drop),
+        durTc(itemFrames(it), it), it.in, it.out]);
+    }
+    const csv = "\ufeff" + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `${(this.pl.name || "playlist").replace(/[\\/:*?"<>|]/g, "_")}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
   previewItem() {
@@ -267,6 +287,13 @@ export class PlaylistUI {
     };
     $("#pl-cue").onclick = () => this.cueSelected(false);
     $("#pl-preview").onclick = () => this.openPreview();
+    $("#pl-up") && ($("#pl-up").onclick = () => this._moveSel(-1));
+    $("#pl-down") && ($("#pl-down").onclick = () => this._moveSel(1));
+    $("#pl-rename") && ($("#pl-rename").onclick = async () => {
+      const name = await ask({ title: "리스트 이름", message: "SAVE 하면 이 이름으로 저장됩니다", input: this.pl.name || "", ok: "변경" });
+      if (name) this.op("rename", { name });
+    });
+    $("#pl-export") && ($("#pl-export").onclick = () => this.exportCsv());
     $("#pl-pause").onclick = () => {
       const ids = this.selectedIds();
       const at = ids.length ? this.pl.items.findIndex(i => i.id === ids[0]) : this.pl.items.length;

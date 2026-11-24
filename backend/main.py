@@ -6,6 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import shutil
 import socket
 from urllib.parse import quote as urlquote
 
@@ -29,6 +30,8 @@ from .osd import Osd
 from . import scenes as scenes_mod
 from .player import Player
 from .sdi_preview import SdiPreview
+from .sysinfo import SysInfo
+from .loghub import LogHub
 from .version import commit_stamp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -83,6 +86,9 @@ class App:
         self.stamp = commit_stamp()
         self.engine = Engine()
         self.hub = Hub()
+        self.loghub = LogHub(self.hub.broadcast)
+        logging.getLogger().addHandler(self.loghub)
+        self.sysinfo = SysInfo()
         c = self.cfg["casparcg"]
         self.amcp = Amcp(c["host"], c["amcp_port"], on_state=self._amcp_state)
         self.media = Media(c["media_path"])
@@ -120,15 +126,31 @@ class App:
         }
 
     async def start(self):
+        self.loghub.loop = asyncio.get_running_loop()
+        self.sysinfo.start()
         self.osc_transport = await osc.listen(self.cfg["casparcg"]["osc_port"], self.engine.on_osc)
         self.amcp.start()
         await self.ext.start_osc()
         self._ticker = asyncio.create_task(self._tick())
         self._osd_task = asyncio.create_task(self._osd_loop())
 
+    def sys_msg(self) -> dict:
+        snap = self.engine.snapshot()
+        try:
+            du = shutil.disk_usage(self.roots.base("media"))
+            disk = {"total": du.total, "free": du.free}
+        except OSError:
+            disk = None
+        return {"type": "sys", "sys": self.sysinfo.snapshot, "amcp": self.amcp.connected, "media_disk": disk,
+                "players": [{"idx": p.idx, "name": p.name, "status": p.status(),
+                             "clip": p.loaded["name"] if p.loaded else None} for p in self.players],
+                "osc": snap["osc_alive"], "caspar_channels": {n: {"format": c["format"], "alive": c["alive"]}
+                                                              for n, c in snap["channels"].items()}}
+
     async def _osd_loop(self):
         while True:
             await asyncio.sleep(1)
+            await self.hub.broadcast(self.sys_msg())
             for name, fn in (("osd", self.osd.ensure), ("sdi", self.sdi.ensure)):
                 try:
                     await fn()
@@ -140,6 +162,7 @@ class App:
         self._osd_task.cancel()
         await self.amcp.stop()
         self.ext.stop()
+        self.sysinfo.stop()
         if self.osc_transport:
             self.osc_transport.close()
 
@@ -240,6 +263,16 @@ async def ext_cmd(n: int, cmd: str, request: Request, key: str | None = None):
         return PlainTextResponse(f"ERR casparcg {e.text or e}\n", status_code=502)
     except (ValueError, OSError, RuntimeError) as e:
         return PlainTextResponse(f"ERR {e}\n", status_code=400)
+
+
+@api.get("/api/v1/logs")
+async def logs(limit: int = 500):
+    return {"logs": app_state.loghub.recent(max(1, min(2000, limit)))}
+
+
+@api.get("/api/v1/sys")
+async def sys_info():
+    return app_state.sys_msg()
 
 
 @api.get("/api/v1/status")
@@ -346,6 +379,7 @@ class ChCmd(BaseModel):
     ids: list[str] | None = None
     at: int | None = None
     slot: str | None = None
+    name: str | None = None
 
 
 CH_ACTIONS = {
@@ -614,7 +648,8 @@ async def ws_endpoint(ws: WebSocket):
     hello.update(type="hello", info=app_state.info(),
                  logs={p.idx: list(p.logs)[-50:] for p in app_state.players},
                  playlists={p.idx: p.pl.view() for p in app_state.players},
-                 jobs=app_state.jobs.list(), favorites=app_state.favorites.data)
+                 jobs=app_state.jobs.list(), favorites=app_state.favorites.data,
+                 sys=app_state.sys_msg(), syslog=app_state.loghub.recent(300))
     await hub.send(ws, hello)
     try:
         while True:
@@ -639,7 +674,7 @@ async def media_file(path: str):
 
 @api.get("/")
 async def root():
-    return RedirectResponse("/browser.html")
+    return RedirectResponse("/launcher.html")
 
 
 api.mount("/", StaticFiles(directory=ROOT / "www", html=True), name="www")

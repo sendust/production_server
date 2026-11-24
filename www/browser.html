@@ -5,69 +5,81 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sendust playlist [Media Browser]</title>
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ump.css">
 <link rel="stylesheet" href="css/browser.css">
 </head>
 <body>
-<div class="app">
-  <header class="top">
-    <span class="chname">Media Browser</span>
+<div class="ub">
+  <header class="ub-title">
+    <span class="t">Media Browser</span>
     <span class="route" id="players"></span>
-    <span class="conn">
-      <span><i class="dot" id="d-ws"></i>WS</span>
-      <span><i class="dot" id="d-amcp"></i>AMCP</span>
-    </span>
+    <span class="sp"></span>
+    <span class="dots"><span><i class="dot" id="d-ws"></i>WS</span><span><i class="dot" id="d-amcp"></i>AMCP</span></span>
   </header>
 
-  <div class="panes">
-    <section class="panel pane" id="pane-media" data-root="media"></section>
-    <section class="panel pane" id="pane-host" data-root="host"></section>
-  </div>
+  <!-- upper: CasparCG media path (fixed) -->
+  <section class="pane" id="pane-media" data-root="media">
+    <div class="pane-head">
+      <span class="plabel media">CasparCG MEDIA</span>
+      <span class="crumbs mono"></span>
+      <span class="sp"></span>
+      <input class="filter" type="search" placeholder="filter">
+      <button class="ibtn" data-op="refresh" title="새로고침 (F9)">⟳</button>
+    </div>
+    <div class="pane-body">
+      <div class="tree" tabindex="0"></div>
+      <div class="files">
+        <div class="list fl" tabindex="0"><table>
+          <thead><tr><th data-sort="name">파일명</th><th data-sort="ext">확장자</th><th data-sort="dur" class="r">Duration</th><th data-sort="size" class="r">Size</th><th data-sort="mtime" class="r">수정날짜</th></tr></thead>
+          <tbody></tbody></table></div>
+        <div class="pane-tools">
+          <button class="ubtn sm" data-op="mkdir" title="새 폴더 (F7)">+ 폴더</button>
+          <button class="ubtn sm" data-op="rename" title="이름 변경 (F2)">이름변경</button>
+          <button class="ubtn sm red" data-op="delete" title="삭제 (Del)">삭제</button>
+          <span class="sp"></span>
+          <span class="sendto"></span>
+          <span class="count dim mono"></span>
+        </div>
+      </div>
+    </div>
+    <div class="dropmask">PC 파일을 놓으면 이 폴더로 업로드</div>
+  </section>
 
-  <section class="panel jobs hidden" id="jobs"></section>
+  <!-- lower: one favourite path -->
+  <section class="pane" id="pane-fav" data-root="host">
+    <div class="pane-head">
+      <span class="plabel fav">즐겨찾기</span>
+      <select class="uselect favsel" title="보여줄 즐겨찾기 경로"></select>
+      <button class="ibtn" data-op="favadd" title="현재 폴더를 즐겨찾기에 추가">★+</button>
+      <button class="ibtn" data-op="favdel" title="선택한 즐겨찾기 삭제">★−</button>
+      <span class="crumbs mono"></span>
+      <span class="sp"></span>
+      <input class="filter" type="search" placeholder="filter">
+      <button class="ibtn" data-op="refresh" title="새로고침">⟳</button>
+    </div>
+    <div class="pane-body">
+      <div class="tree" tabindex="0"></div>
+      <div class="files">
+        <div class="list fl" tabindex="0"><table>
+          <thead><tr><th data-sort="name">파일명</th><th data-sort="ext">확장자</th><th data-sort="dur" class="r"></th><th data-sort="size" class="r">Size</th><th data-sort="mtime" class="r">수정날짜</th></tr></thead>
+          <tbody></tbody></table></div>
+        <div class="pane-tools">
+          <button class="ubtn xfer" data-op="transfer" title="선택한 파일/폴더를 CasparCG MEDIA 의 현재 폴더로 복사 (F5)">▲ 전송하기 → CasparCG MEDIA</button>
+          <span class="sp"></span>
+          <span class="count dim mono"></span>
+        </div>
+      </div>
+    </div>
+  </section>
 
-  <footer class="panel keys dim">
-    <span><b>Tab</b> 판넬 전환</span><span><b>Enter</b> 열기</span><span><b>Backspace</b> 상위</span>
-    <span><b>F2</b> 이름변경</span><span><b>F5</b> 복사</span><span><b>F6</b> 이동</span><span><b>F7</b> 새 폴더</span>
-    <span><b>F8/Del</b> 삭제</span><span><b>Ctrl+A</b> 전체선택</span>
-    <span>파일을 플레이어 창의 플레이리스트로 드래그 · PC 파일을 판넬에 드롭하면 업로드</span>
-  </footer>
+  <!-- transfer status -->
+  <section class="xfers">
+    <div class="xhead"><span class="tab">전송현황</span><span class="sp"></span><button class="ibtn" id="x-clear" title="완료된 항목 지우기">완료 지우기</button></div>
+    <div class="list"><table>
+      <thead><tr><th>원본</th><th class="c">Direction</th><th>대상</th><th class="c" style="width:200px">전송</th><th class="r">Size</th><th class="c">전송상태</th><th></th></tr></thead>
+      <tbody id="xbody"></tbody></table></div>
+  </section>
 </div>
-
-<template id="pane-tpl">
-  <div class="pane-head">
-    <span class="rootlabel"></span>
-    <span class="crumbs mono"></span>
-    <span class="spacer"></span>
-    <select class="favs" title="즐겨찾기"><option value="">★ 즐겨찾기</option></select>
-    <button class="ibtn" data-op="fav" title="현재 폴더를 즐겨찾기에 추가/삭제">☆</button>
-  </div>
-  <div class="pane-tools">
-    <button class="ibtn" data-op="up" title="상위 폴더 (Backspace)">↑</button>
-    <button class="ibtn" data-op="refresh" title="새로고침">⟳</button>
-    <span class="sep"></span>
-    <button class="ibtn" data-op="mkdir" title="새 폴더 (F7)">+ 폴더</button>
-    <button class="ibtn" data-op="rename" title="이름 변경 (F2)">이름</button>
-    <button class="ibtn" data-op="copy" title="반대편 판넬로 복사 (F5)">복사 ⇅</button>
-    <button class="ibtn" data-op="move" title="반대편 판넬로 이동 (F6)">이동 ⇅</button>
-    <button class="ibtn danger" data-op="delete" title="삭제 (F8 / Del)">삭제</button>
-    <span class="sep"></span>
-    <span class="sendto"></span>
-    <span class="spacer"></span>
-    <input class="filter" type="search" placeholder="filter" title="이름 필터">
-    <span class="count dim mono"></span>
-  </div>
-  <div class="list fl" tabindex="0">
-    <table>
-      <thead><tr>
-        <th data-sort="name">Name</th><th data-sort="kind">Kind</th><th data-sort="dur" class="durcol">Duration</th>
-        <th data-sort="size" class="r">Size</th><th data-sort="mtime" class="r">Modified</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="dropmask">PC 파일을 놓으면 이 폴더로 업로드</div>
-</template>
-
 <script type="module" src="js/browser.js"></script>
 </body>
 </html>

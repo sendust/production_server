@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust launcher</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ump.css">
+</head>
+<body>
+<div class="lnch">
+  <div class="logo">sendust<small>playlist</small></div>
+
+  <div class="sysbox" id="sys">
+    <div class="r"><span class="k">CasparCG</span><span id="s-amcp" class="bad">●</span></div>
+    <div class="r"><span class="k">OSC</span><span id="s-osc" class="bad">●</span></div>
+    <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
+    <div class="r"><span class="k">RAM</span><span id="s-mem">-</span></div>
+    <div class="r"><span class="k">GPU</span><span id="s-gpu">-</span></div>
+    <div class="r"><span class="k">GPU °C</span><span id="s-gput">-</span></div>
+    <div class="r"><span class="k">Media</span><span id="s-disk">-</span></div>
+  </div>
+
+  <button class="ubtn" id="b-log" title="로그 뷰어 창">로그 뷰어</button>
+  <button class="ubtn" id="b-browser" title="미디어 브라우저 창">미디어 브라우저</button>
+  <hr>
+  <div class="host" id="host">-</div>
+  <button class="ubtn" id="b-all" title="모든 재생 창을 화면에 나란히 엽니다">일괄 실행</button>
+  <button class="ubtn" id="b-close" title="런처가 연 창을 모두 닫습니다">모두 종료</button>
+  <hr>
+  <div id="chs" style="display:flex;flex-direction:column;gap:6px"></div>
+  <button class="ubtn sm hidden" id="b-self" title="이 런처를 왼쪽에 붙는 좁은 창으로 다시 엽니다" style="margin-top:8px">런처 창으로</button>
+
+  <div class="foot"><div class="clock" id="clock"></div><div id="stamp"></div><span id="d-ws-wrap"><i class="dot" id="d-ws"></i>WS</span></div>
+</div>
+<script type="module">
+import { $, $$, connectWs, esc, fmtBytes } from "./js/common.js";
+
+const LW = 150;                 // launcher width: windows are tiled to its right
+const wins = {};                // name -> Window opened from here
+const bc = "BroadcastChannel" in window ? new BroadcastChannel("sendust") : null;
+let info = null, players = [];
+
+function scr() {
+  const s = window.screen;
+  return { x: s.availLeft ?? 0, y: s.availTop ?? 0, w: s.availWidth, h: s.availHeight };
+}
+function open(name, url, r) {
+  const w = window.open(url, name, `popup,left=${Math.round(r.x)},top=${Math.round(r.y)},width=${Math.round(r.w)},height=${Math.round(r.h)}`);
+  if (w) { wins[name] = w; try { w.focus(); } catch { /* cross-window */ } }
+  return w;
+}
+// rectangles: PLAY windows share the screen right of the launcher; browser / log open over them
+function playRect(i) {
+  const s = scr(), n = Math.max(1, info?.channels.length ?? 1), W = Math.floor((s.w - LW) / n);
+  return { x: s.x + LW + i * W, y: s.y, w: W, h: s.h };
+}
+const openPlay = (idx, i) => open(`sendust_player_${idx}`, `/player.html?ch=${idx}`, playRect(i));
+const openBrowser = () => { const s = scr(); return open("sendust_browser", "/browser.html", { x: s.x + LW, y: s.y, w: Math.min(1400, s.w - LW), h: Math.round(s.h * 0.9) }); };
+const openLog = () => { const s = scr(); const h = Math.round(s.h * 0.4); return open("sendust_log", "/log.html", { x: s.x + LW, y: s.y + s.h - h, w: s.w - LW, h }); };
+
+$("#b-browser").onclick = openBrowser;
+$("#b-log").onclick = openLog;
+$("#b-all").onclick = () => (info?.channels ?? []).forEach((c, i) => openPlay(c.channel_index, i));
+$("#b-close").onclick = () => {
+  for (const w of Object.values(wins)) { try { w.close(); } catch { /* gone */ } }
+  bc?.postMessage({ cmd: "close" });   // windows opened before a launcher reload close themselves
+};
+
+// opened as a normal tab: offer to re-open as a narrow popup on the left
+if (!window.opener && window.outerWidth > 400) {
+  const b = $("#b-self");
+  b.classList.remove("hidden");
+  b.onclick = () => { const s = scr(); if (window.open("/launcher.html", "sendust_launcher", `popup,left=${s.x},top=${s.y},width=${LW},height=${s.h}`)) window.close(); };
+}
+
+function renderChannels() {
+  $("#chs").innerHTML = (info?.channels ?? []).map((c, i) => {
+    const p = players.find(x => x.idx === c.channel_index);
+    const st = p?.status ?? "empty";
+    const cls = st === "playing" ? "playing" : st === "paused" ? "paused" : st === "ended" ? "ended" : "";
+    const sub = st === "empty" ? "EJECT" : st.toUpperCase();
+    return `<button class="ubtn chbtn ${cls}" data-idx="${c.channel_index}" data-i="${i}" title="${esc(p?.clip ?? "")}">${esc(c.name.replace(/\s+/g, "-"))}<small>${esc(sub)}</small></button>`;
+  }).join("");
+  $$("#chs [data-idx]").forEach(b => b.onclick = () => openPlay(Number(b.dataset.idx), Number(b.dataset.i)));
+}
+
+const pct = v => v == null ? "-" : `${v.toFixed(0)}%`;
+connectWs(m => {
+  if (m.type === "hello") {
+    info = m.info;
+    document.title = `${info.title} [Launcher] {${info.stamp}}`;
+    $("#host").textContent = info.host;
+    $("#stamp").textContent = info.stamp;
+    renderChannels();
+  }
+  const s = m.type === "hello" ? m.sys : m.type === "sys" ? m : null;
+  if (!s) return;
+  const sy = s.sys || {};
+  $("#s-amcp").className = s.amcp ? "ok" : "bad";
+  $("#s-amcp").textContent = s.amcp ? "● ON" : "● OFF";
+  $("#s-osc").className = s.osc ? "ok" : "bad";
+  $("#s-osc").textContent = s.osc ? "● ON" : "● OFF";
+  $("#s-cpu").textContent = pct(sy.cpu_percent);
+  $("#s-cpu").className = sy.cpu_percent > 85 ? "bad" : sy.cpu_percent > 65 ? "warn" : "";
+  $("#s-mem").textContent = sy.mem_available != null ? fmtBytes(sy.mem_available) : "-";
+  const g = (sy.gpus || [])[0];
+  $("#s-gpu").textContent = g ? `${pct(g.util_gpu)} E${pct(g.util_enc)}` : "-";
+  $("#s-gput").textContent = g?.temp_c != null ? `${g.temp_c.toFixed(0)}°C` : "-";
+  $("#s-gput").className = g?.temp_c > 85 ? "bad" : g?.temp_c > 75 ? "warn" : "";
+  const d = s.media_disk;
+  $("#s-disk").textContent = d ? `${fmtBytes(d.free)}` : "-";
+  $("#s-disk").className = d && d.free / d.total < 0.05 ? "bad" : d && d.free / d.total < 0.15 ? "warn" : "";
+  $("#sys").title = `${sy.hostname ?? ""}\n${sy.cpu_model ?? ""}\n${(sy.nics || []).map(n => `${n.name}: ${n.ips.join(", ")}`).join("\n")}`;
+  $("#clock").textContent = (sy.time || "").slice(11, 19);
+  if (s.players && JSON.stringify(s.players) !== JSON.stringify(players)) { players = s.players; renderChannels(); }
+}, on => $("#d-ws").classList.toggle("on", on));
+</script>
+</body>
+</html>

@@ -104,9 +104,10 @@ def _tree_size(p: Path) -> int:
 class Job:
     _ids = itertools.count(1)
 
-    def __init__(self, kind: str, desc: str):
+    def __init__(self, kind: str, desc: str, src: str = "", dst: str = ""):
         self.id = next(self._ids)
         self.kind, self.desc = kind, desc
+        self.src, self.dst = src, dst
         self.status = "running"   # running | done | error | cancelled
         self.total = 0
         self.done = 0
@@ -116,7 +117,8 @@ class Job:
         self.cancel = threading.Event()
 
     def view(self) -> dict:
-        return {"id": self.id, "kind": self.kind, "desc": self.desc, "status": self.status, "total": self.total,
+        return {"id": self.id, "kind": self.kind, "desc": self.desc, "src": self.src, "dst": self.dst,
+                "status": self.status, "total": self.total,
                 "done": self.done, "current": self.current, "error": self.error, "started": self.started}
 
 
@@ -181,7 +183,8 @@ class Jobs:
         if conflicts and not overwrite:
             raise Conflict(conflicts)
         names = ", ".join(s.name for s in srcs[:3]) + (f" +{len(srcs) - 3}" if len(srcs) > 3 else "")
-        job = Job("move" if move else "copy", f"{names} → {dst_root}:/{dst_dir}")
+        job = Job("move" if move else "copy", f"{names} → {dst_root}:/{dst_dir}",
+                  src=", ".join(str(x) for x in srcs[:3]) + (f" +{len(srcs) - 3}" if len(srcs) > 3 else ""), dst=str(dst))
 
         def run(job: Job):
             job.total = sum(_tree_size(s) for s in srcs)

@@ -1,72 +1,64 @@
-// Media browser: midnight-commander style upper (CasparCG media path) / lower (/mnt) panes.
+// Media browser (uBrowser-like): upper pane = CasparCG media path, lower pane = one favourite path,
+// each with a folder tree and a file list; "전송하기" copies the lower selection into the upper folder.
 import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout } from "./common.js";
 
-const S = { info: null, favorites: [], jobs: new Map(), active: null, session: {} };
-const probeCache = new Map();   // media rel path -> info | "pending" | "error"
+const S = { info: null, favorites: [], jobs: new Map(), session: {}, active: null };
+const probeCache = new Map();   // media rel path -> probe | "pending" | "error"
+let dragSource = null;
 
-// ---------------------------------------------------------------- session (per client IP)
-let saveTimer;
+const extOf = n => { const i = n.lastIndexOf("."); return i > 0 ? n.slice(i + 1).toLowerCase() : ""; };
+const fmtDate = t => new Date(t * 1000).toLocaleString("ko-KR", { hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+let saveT;
 function saveSession() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const browser = {};
-    for (const p of panes) browser[p.root] = { dir: p.dir, sort: p.sort, desc: p.desc };
-    api("session", { browser }).catch(() => {});
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    api("session", { browser2: { mediaDir: media.dir, favIdx: fav.favIdx, favDir: fav.dir,
+      sort: Object.fromEntries(panes.map(p => [p.el.id, [p.sort, p.desc]])) } }).catch(() => {});
   }, 500);
 }
 
-// ---------------------------------------------------------------- pane
+// ================================================================ pane = tree + list
 class Pane {
   constructor(el) {
     this.el = el;
     this.root = el.dataset.root;
-    el.append($("#pane-tpl").content.cloneNode(true));
-    this.tbody = $("tbody", el);
+    this.tree = $(".tree", el);
     this.list = $(".fl", el);
+    this.tbody = $("tbody", el);
+    this.top = "";              // tree root (rel to the root): "" for media, the favourite dir for the lower pane
     this.dir = "";
-    this.items = [];
-    this.view = [];
-    this.sel = new Set();     // selected paths
-    this.cursor = -1;         // index in view
-    this.anchor = -1;
-    this.sort = "name"; this.desc = false;
-    this.filter = "";
-    $(".rootlabel", el).textContent = this.root === "media" ? "CasparCG MEDIA" : "HOST";
-    $(".rootlabel", el).title = this.root;
+    this.items = []; this.view = [];
+    this.sel = new Set(); this.cursor = 0; this.anchor = 0;
+    this.sort = "name"; this.desc = false; this.filter = "";
+    this.nodes = new Map();     // rel dir -> {open, kids: [rel] | null}
     this._bind();
   }
 
-  get other() { return panes.find(p => p !== this); }
   get base() { return this.root === "media" ? S.info?.media_path : S.info?.host_root; }
+  absLabel(rel) { return `${this.base}${rel ? "/" + rel : ""}`; }
 
   _bind() {
     const el = this.el;
     el.addEventListener("mousedown", () => setActive(this));
-    $$(".pane-tools [data-op], .pane-head [data-op]", el).forEach(b => b.onclick = () => this.op(b.dataset.op));
+    $$("[data-op]", el).forEach(b => { b.addEventListener("mousedown", e => e.preventDefault()); b.onclick = () => this.op(b.dataset.op); });
     $(".filter", el).oninput = e => { this.filter = e.target.value.toLowerCase(); this.render(); };
-    $(".favs", el).onchange = e => {
-      const f = S.favorites[Number(e.target.value)];
-      e.target.value = "";
-      if (!f) return;
-      if (f.root !== this.root) panes.find(p => p.root === f.root)?.open(f.dir);
-      else this.open(f.dir);
-    };
     $$("th[data-sort]", el).forEach(th => th.onclick = () => {
       const k = th.dataset.sort;
       if (this.sort === k) this.desc = !this.desc; else { this.sort = k; this.desc = false; }
       this.render(); saveSession();
     });
-    this.tbody.addEventListener("click", e => {
-      const tr = e.target.closest("tr"); if (!tr) return;
-      this.clickRow(Number(tr.dataset.i), e);
-    });
-    this.tbody.addEventListener("dblclick", e => {
-      const tr = e.target.closest("tr"); if (!tr) return;
-      this.activate(Number(tr.dataset.i));
-    });
+    this.tbody.addEventListener("click", e => { const tr = e.target.closest("tr"); if (tr) this.clickRow(Number(tr.dataset.i), e); });
+    this.tbody.addEventListener("dblclick", e => { const tr = e.target.closest("tr"); if (tr) this.activate(Number(tr.dataset.i)); });
     this.list.addEventListener("keydown", e => this.key(e));
+    this.tree.addEventListener("click", e => {
+      const n = e.target.closest(".tnode"); if (!n) return;
+      const rel = n.dataset.rel;
+      if (e.target.closest(".tw")) this.toggle(rel); else this.open(rel);
+    });
+    this.tree.addEventListener("dblclick", e => { const n = e.target.closest(".tnode"); if (n) this.toggle(n.dataset.rel); });
 
-    // drag rows out (to the other pane or to a player window)
+    // drag rows out: to a playback window's playlist, or from the favourite pane up to the media pane
     this.tbody.addEventListener("dragstart", e => {
       const tr = e.target.closest("tr"); if (!tr) return;
       const it = this.view[Number(tr.dataset.i)];
@@ -78,14 +70,11 @@ class Pane {
       dragSource = this;
     });
     this.tbody.addEventListener("dragend", () => { dragSource = null; });
-
-    // drops: rows from the other pane (copy / Shift = move) or PC files (upload)
+    if (this.root !== "media") return;
     el.addEventListener("dragover", e => {
       const t = e.dataTransfer.types;
-      if (t.includes("Files")) { e.preventDefault(); el.classList.add("dragover"); e.dataTransfer.dropEffect = "copy"; }
-      else if (t.includes(DND_MEDIA) && dragSource && dragSource !== this) {
-        e.preventDefault(); el.classList.add("dragtarget"); e.dataTransfer.dropEffect = e.shiftKey ? "move" : "copy";
-      }
+      if (t.includes("Files")) { e.preventDefault(); el.classList.add("dragover"); }
+      else if (t.includes(DND_MEDIA) && dragSource && dragSource !== this) { e.preventDefault(); el.classList.add("dragtarget"); }
     });
     el.addEventListener("dragleave", e => { if (!el.contains(e.relatedTarget)) el.classList.remove("dragover", "dragtarget"); });
     el.addEventListener("drop", e => {
@@ -94,71 +83,122 @@ class Pane {
       const raw = e.dataTransfer.getData(DND_MEDIA);
       if (!raw || !dragSource || dragSource === this) return;
       e.preventDefault();
-      const d = JSON.parse(raw);
-      transfer(dragSource, d.paths, this, e.shiftKey);
+      transfer(dragSource, JSON.parse(raw).paths);
     });
   }
 
+  // ---- tree ------------------------------------------------------------
+  async kids(rel) {
+    let n = this.nodes.get(rel);
+    if (!n) this.nodes.set(rel, n = { open: false, kids: null });
+    if (n.kids) return n.kids;
+    try {
+      const r = await api(`fs/list?root=${this.root}&dir=${encodeURIComponent(rel)}`);
+      n.kids = r.items.filter(i => i.dir).map(i => i.path).sort((a, b) => a.localeCompare(b, "ko", { numeric: true }));
+    } catch { n.kids = []; }
+    return n.kids;
+  }
+  async toggle(rel) {
+    const n = this.nodes.get(rel) || { open: false, kids: null };
+    this.nodes.set(rel, n);
+    n.open = !n.open;
+    if (n.open) await this.kids(rel);
+    this.renderTree();
+  }
+  async reveal(rel) {   // expand every ancestor of rel (below top)
+    const parts = rel.slice(this.top ? this.top.length + 1 : 0).split("/").filter(Boolean);
+    let cur = this.top;
+    for (let i = 0; i <= parts.length; i++) {
+      const n = this.nodes.get(cur) || { open: false, kids: null };
+      this.nodes.set(cur, n);
+      n.open = true;   // the opened folder unfolds too (one click shows its files and subfolders)
+      await this.kids(cur);
+      if (i < parts.length) cur = cur ? `${cur}/${parts[i]}` : parts[i];
+    }
+    this.renderTree();
+  }
+  renderTree() {
+    const out = [];
+    const walk = (rel, depth) => {
+      const n = this.nodes.get(rel);
+      const name = rel === this.top ? (this.root === "media" ? this.absLabel(this.top) : this.absLabel(this.top)) : rel.split("/").pop();
+      const hasKids = !n || n.kids === null || n.kids.length > 0;
+      out.push(`<div class="tnode ${rel === this.dir ? "cur" : ""}" data-rel="${esc(rel)}" style="padding-left:${6 + depth * 16}px">
+        <span class="tw">${hasKids ? (n?.open ? "▾" : "▸") : ""}</span><span class="ic">▰</span><span>${esc(name)}</span></div>`);
+      if (n?.open && n.kids) for (const k of n.kids) walk(k, depth + 1);
+    };
+    walk(this.top, 0);
+    this.tree.innerHTML = out.join("");
+    this.tree.querySelector(".tnode.cur")?.scrollIntoView({ block: "nearest" });
+  }
+  async setTop(top) {
+    this.top = top;
+    this.nodes.clear();
+    await this.kids(top);
+    this.nodes.get(top).open = true;
+    await this.open(top);
+  }
+
+  // ---- list ------------------------------------------------------------
   async open(dir = this.dir, keepSel = false) {
     try {
       const r = await api(`fs/list?root=${this.root}&dir=${encodeURIComponent(dir)}`);
-      const changedDir = dir !== this.dir;
+      const changed = dir !== this.dir;
       this.dir = dir;
       this.items = r.items;
-      if (!keepSel || changedDir) { this.sel.clear(); this.cursor = 0; this.anchor = 0; }
-      if (changedDir) { this.filter = ""; $(".filter", this.el).value = ""; }
+      const n = this.nodes.get(dir);
+      if (n) n.kids = r.items.filter(i => i.dir).map(i => i.path).sort((a, b) => a.localeCompare(b, "ko", { numeric: true }));
+      if (!keepSel || changed) { this.sel.clear(); this.cursor = 0; this.anchor = 0; }
+      if (changed) { this.filter = ""; $(".filter", this.el).value = ""; }
+      await this.reveal(dir);
       this.render();
       saveSession();
     } catch (e) {
       toast(`${this.root}: ${e.message}`);
-      if (dir) this.open("");   // folder vanished -> back to root
+      if (dir !== this.top) this.open(this.top);
     }
   }
-
-  parent() { return this.dir.split("/").slice(0, -1).join("/"); }
+  parent() { return this.dir === this.top ? this.top : this.dir.split("/").slice(0, -1).join("/"); }
 
   render() {
     const key = this.sort, dir = this.desc ? -1 : 1;
-    const val = it => key === "dur" ? (probeCache.get(it.path)?.duration ?? -1) : key === "kind" ? (it.kind || "") : it[key];
-    let v = this.items.filter(it => !this.filter || it.name.toLowerCase().includes(this.filter));
+    const val = it => key === "dur" ? (probeCache.get(it.path)?.duration ?? -1) : key === "ext" ? extOf(it.name) : it[key];
+    const v = this.items.filter(it => !this.filter || it.name.toLowerCase().includes(this.filter));
     v.sort((a, b) => (b.dir - a.dir) || (key === "name"
       ? a.name.localeCompare(b.name, "ko", { numeric: true }) * dir
       : ((val(a) > val(b)) - (val(a) < val(b))) * dir || a.name.localeCompare(b.name, "ko", { numeric: true })));
-    if (this.dir) v.unshift({ name: "..", dir: true, up: true, path: this.parent() });
+    if (this.dir !== this.top) v.unshift({ name: "..", dir: true, up: true, path: this.parent() });
     this.view = v;
     this.cursor = Math.min(Math.max(0, this.cursor), v.length - 1);
-    $$("th[data-sort]", this.el).forEach(th => th.className = (th.className.replace(/\bsorted\b|\bdesc\b/g, "").trim() +
-      (th.dataset.sort === this.sort ? ` sorted${this.desc ? " desc" : ""}` : "")).trim());
-    // breadcrumbs
-    const parts = this.dir ? this.dir.split("/") : [];
-    $(".crumbs", this.el).innerHTML = `<a data-d="">${esc(this.base || "/")}</a>` +
-      parts.map((p, i) => `/<a data-d="${esc(parts.slice(0, i + 1).join("/"))}">${esc(p)}</a>`).join("");
+    $$("th[data-sort]", this.el).forEach(th => {
+      th.classList.toggle("sorted", th.dataset.sort === this.sort);
+      th.classList.toggle("desc", th.dataset.sort === this.sort && this.desc);
+    });
+    const rel = this.dir.slice(this.top.length).split("/").filter(Boolean);
+    $(".crumbs", this.el).innerHTML = `<a data-d="${esc(this.top)}">${esc(this.absLabel(this.top))}</a>` +
+      rel.map((p, i) => `/<a data-d="${esc([this.top, ...rel.slice(0, i + 1)].filter(Boolean).join("/"))}">${esc(p)}</a>`).join("");
     $$(".crumbs a", this.el).forEach(a => a.onclick = () => this.open(a.dataset.d));
     this.paint();
-    this.renderFavs();
     if (this.root === "media") probeVisible(this);
   }
 
   paint() {
-    const rows = this.view.map((it, i) => {
-      const cls = [it.dir ? "dir" : "", this.sel.has(it.path) && !it.up ? "sel" : "", i === this.cursor ? "cursor" : ""].join(" ");
+    this.tbody.innerHTML = this.view.map((it, i) => {
+      const cls = [it.dir ? "dir" : `k-${it.kind || ""}`, this.sel.has(it.path) && !it.up ? "sel" : "", i === this.cursor ? "cursor" : ""].join(" ");
       const pr = probeCache.get(it.path);
-      const dur = it.dir || !it.kind || it.kind === "image" ? "" :
+      const dur = this.root !== "media" || it.dir || !it.kind || it.kind === "image" ? "" :
         pr && typeof pr === "object" ? durTc(pr.frames, pr) : pr === "error" ? "?" : "…";
-      const mt = it.up ? "" : new Date(it.mtime * 1000).toLocaleString("ko-KR", { hour12: false, year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
       return `<tr class="${cls}" data-i="${i}" draggable="${!it.up}">
-        <td class="name" title="${esc(it.name)}">${it.dir ? "▸ " : ""}${esc(it.name)}${it.dir && !it.up ? "/" : ""}</td>
-        <td class="k-${it.kind || ""}">${it.dir ? "" : esc(it.kind || "")}</td>
-        <td class="dur">${dur}</td>
+        <td class="name" title="${esc(it.name)}">${it.dir ? "▰ " : ""}${esc(it.dir ? it.name : it.name.replace(/\.[^.]+$/, ""))}</td>
+        <td class="ext">${it.dir ? "" : esc(extOf(it.name))}</td>
+        <td class="r dur">${dur}</td>
         <td class="r num">${it.dir ? "" : fmtBytes(it.size)}</td>
-        <td class="r num">${mt}</td></tr>`;
-    });
-    this.tbody.innerHTML = rows.join("");
-    const nsel = this.sel.size, files = this.items.filter(x => !x.dir);
-    const bytes = this.selected().reduce((a, x) => a + (x.size || 0), 0);
-    $(".count", this.el).textContent = nsel ? `${nsel} selected · ${fmtBytes(bytes)}` : `${files.length} files`;
+        <td class="r num">${it.up ? "" : fmtDate(it.mtime)}</td></tr>`;
+    }).join("");
+    const nsel = this.sel.size, bytes = this.selected().reduce((a, x) => a + (x.size || 0), 0);
+    $(".count", this.el).textContent = nsel ? `${nsel} 선택 · ${fmtBytes(bytes)}` : `${this.items.filter(x => !x.dir).length} files`;
     this.tbody.querySelector("tr.cursor")?.scrollIntoView({ block: "nearest" });
-    this.renderSendTo();
+    renderSendTo();
   }
 
   selected() {
@@ -169,42 +209,30 @@ class Pane {
   }
 
   clickRow(i, e) {
-    const it = this.view[i];
-    if (!it) return;
-    if (e.shiftKey && this.anchor >= 0) {
-      const [a, b] = [Math.min(this.anchor, i), Math.max(this.anchor, i)];
+    const it = this.view[i]; if (!it) return;
+    if (e.shiftKey) {
       if (!e.ctrlKey) this.sel.clear();
-      for (let k = a; k <= b; k++) if (!this.view[k].up) this.sel.add(this.view[k].path);
+      for (let k = Math.min(this.anchor, i); k <= Math.max(this.anchor, i); k++) if (!this.view[k].up) this.sel.add(this.view[k].path);
     } else if (e.ctrlKey || e.metaKey) {
       if (!it.up) this.sel.has(it.path) ? this.sel.delete(it.path) : this.sel.add(it.path);
       this.anchor = i;
-    } else {
-      this.sel = new Set(it.up ? [] : [it.path]);
-      this.anchor = i;
-    }
+    } else { this.sel = new Set(it.up ? [] : [it.path]); this.anchor = i; }
     this.cursor = i;
     this.paint();
   }
-
-  activate(i) {
-    const it = this.view[i];
-    if (!it) return;
-    if (it.dir) this.open(it.path);
-  }
+  activate(i) { const it = this.view[i]; if (it?.dir) this.open(it.path); }
 
   key(e) {
     const n = this.view.length;
     const move = d => {
       const i = Math.max(0, Math.min(n - 1, this.cursor + d));
       if (e.shiftKey) {
-        if (this.anchor < 0) this.anchor = this.cursor;
         this.sel.clear();
         for (let k = Math.min(this.anchor, i); k <= Math.max(this.anchor, i); k++) if (!this.view[k].up) this.sel.add(this.view[k].path);
       } else { this.sel.clear(); this.anchor = i; const it = this.view[i]; if (it && !it.up) this.sel.add(it.path); }
       this.cursor = i; this.paint();
     };
-    const k = e.key;
-    let h = true;
+    const k = e.key; let h = true;
     if (k === "ArrowDown") move(1);
     else if (k === "ArrowUp") move(-1);
     else if (k === "PageDown") move(15);
@@ -212,15 +240,14 @@ class Pane {
     else if (k === "Home") move(-n);
     else if (k === "End") move(n);
     else if (k === "Enter") this.activate(this.cursor);
-    else if (k === "Backspace") { if (this.dir) this.open(this.parent()); }
-    else if (k === "Tab") setActive(this.other, true);
+    else if (k === "Backspace") { if (this.dir !== this.top) this.open(this.parent()); }
+    else if (k === "Tab") setActive(this === media ? fav : media, true);
     else if (k === "a" && e.ctrlKey) { this.view.forEach(it => !it.up && this.sel.add(it.path)); this.paint(); }
     else if (k === "F2") this.op("rename");
-    else if (k === "F5") this.op("copy");
-    else if (k === "F6") this.op("move");
+    else if (k === "F5") this.op("transfer");
     else if (k === "F7") this.op("mkdir");
-    else if (k === "F8" || k === "Delete") this.op("delete");
-    else if (k === "F9" || (k === "r" && e.ctrlKey)) this.op("refresh");
+    else if (k === "Delete" || k === "F8") this.op("delete");
+    else if (k === "F9") this.op("refresh");
     else h = false;
     if (h) e.preventDefault();
   }
@@ -228,84 +255,84 @@ class Pane {
   async op(op) {
     const sel = this.selected();
     try {
-      if (op === "up") { if (this.dir) this.open(this.parent()); }
-      else if (op === "refresh") this.open(this.dir, true);
+      if (op === "refresh") { this.nodes.forEach(n => { n.kids = null; }); await this.open(this.dir, true); }
+      else if (op === "transfer") { if (this !== media && sel.length) transfer(this, sel.map(x => x.path)); }
+      else if (op === "favadd") toggleFav(this.dir, true);
+      else if (op === "favdel") removeFav();
+      else if (this.root !== "media") return;   // file operations only in the CasparCG media pane
       else if (op === "mkdir") {
-        const name = await ask({ title: "새 폴더", message: `${this.base}/${this.dir}`, input: "", ok: "만들기" });
-        if (name) { await api("fs/mkdir", { root: this.root, dir: this.dir, name }); this.open(this.dir, true); }
+        const name = await ask({ title: "새 폴더", message: this.absLabel(this.dir), input: "", ok: "만들기" });
+        if (name) { await api("fs/mkdir", { root: this.root, dir: this.dir, name }); this.nodes.forEach(n => { n.kids = null; }); this.open(this.dir, true); }
       } else if (op === "rename") {
         if (sel.length !== 1) return toast("이름을 바꿀 항목 하나를 선택하세요");
         const name = await ask({ title: "이름 변경", message: sel[0].name, input: sel[0].name, ok: "변경" });
         if (name && name !== sel[0].name) { await api("fs/rename", { root: this.root, dir: this.dir, path: sel[0].path, name }); this.open(this.dir, true); }
-      } else if (op === "copy" || op === "move") {
-        if (!sel.length) return;
-        transfer(this, sel.map(x => x.path), this.other, op === "move", true);
       } else if (op === "delete") {
         if (!sel.length) return;
-        const ok = await ask({ title: `삭제 (${sel.length})`, message: `${this.base}/${this.dir} 에서 영구 삭제합니다. 폴더는 내용까지 삭제됩니다.`,
+        const ok = await ask({ title: `삭제 (${sel.length})`, message: `${this.absLabel(this.dir)} 에서 영구 삭제합니다. 폴더는 내용까지 삭제됩니다.`,
           list: sel.map(x => x.name + (x.dir ? "/" : "")), ok: "삭제", danger: true });
         if (ok) await api("fs/delete", { root: this.root, paths: sel.map(x => x.path) });
-      } else if (op === "fav") toggleFav(this);
-    } catch (e) {
-      toast(`${op}: ${e.message}`);
-    }
-  }
-
-  renderFavs() {
-    const sel = $(".favs", this.el);
-    sel.innerHTML = '<option value="">★ 즐겨찾기</option>' + S.favorites.map((f, i) =>
-      `<option value="${i}">${f.root === "media" ? "M" : "H"}: ${esc(f.label || f.dir || "/")}</option>`).join("");
-    const on = S.favorites.some(f => f.root === this.root && f.dir === this.dir);
-    const b = $("[data-op=fav]", this.el);
-    b.textContent = on ? "★" : "☆";
-    b.title = on ? "즐겨찾기에서 삭제" : "현재 폴더를 즐겨찾기에 추가";
-  }
-
-  renderSendTo() {
-    const box = $(".sendto", this.el);
-    if (this.root !== "media" || !S.info) { box.innerHTML = ""; return; }
-    const files = this.selected().filter(x => !x.dir && x.kind);
-    box.innerHTML = S.info.channels.map(c =>
-      `<button class="ibtn" data-ch="${c.channel_index}" ${files.length ? "" : "disabled"} title="선택한 파일을 ${esc(c.name)} 플레이리스트 끝에 추가">→ ${esc(c.name)}</button>`).join("");
-    $$("[data-ch]", box).forEach(b => b.onclick = async () => {
-      const fs = this.selected().filter(x => !x.dir && x.kind).map(x => x.path);
-      try {
-        await api(`ch/${b.dataset.ch}/playlist/add`, { files: fs });
-        toast(`${fs.length} clip(s) → ${b.textContent.slice(2)}`);
-      } catch (e) { toast(e.message); }
-    });
+      }
+    } catch (e) { toast(`${op}: ${e.message}`); }
   }
 }
 
-let dragSource = null;
-const panes = [new Pane($("#pane-media")), new Pane($("#pane-host"))];
-
+const media = new Pane($("#pane-media"));
+const fav = new Pane($("#pane-fav"));
+fav.favIdx = 0;
+const panes = [media, fav];
 function setActive(p, focus = false) {
   S.active = p;
   panes.forEach(x => x.el.classList.toggle("active", x === p));
   if (focus) p.list.focus();
 }
-setActive(panes[0]);
+setActive(media);
 
-// ---------------------------------------------------------------- copy / move / upload
-async function transfer(src, paths, dst, move, confirm = false) {
-  const verb = move ? "이동" : "복사";
-  if (confirm) {
-    const ok = await ask({ title: `${verb} (${paths.length})`, message: `→ ${dst.base}/${dst.dir}`, list: paths.map(p => p.split("/").pop()), ok: verb });
-    if (!ok) return;
-  }
-  const body = { root: src.root, paths, dst_root: dst.root, dst_dir: dst.dir, overwrite: false };
+// ================================================================ favourites (lower pane root)
+function favList() {
+  const host = S.favorites.filter(f => f.root === "host");
+  return host.length ? host : [{ root: "host", dir: "", label: S.info?.host_root || "/mnt" }];
+}
+function renderFavSel() {
+  const sel = $(".favsel", fav.el);
+  const list = favList();
+  sel.innerHTML = list.map((f, i) => `<option value="${i}">${esc(f.label || f.dir || "/")}</option>`).join("");
+  sel.value = String(Math.min(fav.favIdx, list.length - 1));
+}
+$(".favsel", fav.el).onchange = e => { fav.favIdx = Number(e.target.value); fav.setTop(favList()[fav.favIdx].dir); saveSession(); };
+async function toggleFav(dir) {
+  if (S.favorites.some(f => f.root === "host" && f.dir === dir)) return toast("이미 즐겨찾기에 있습니다");
+  const label = await ask({ title: "즐겨찾기 추가", message: fav.absLabel(dir), input: dir.split("/").pop() || "/", ok: "추가" });
+  if (label === null) return;
+  S.favorites.push({ root: "host", dir, label });
+  await api("fs/favorites", { favorites: S.favorites });
+  fav.favIdx = favList().findIndex(f => f.dir === dir);
+}
+async function removeFav() {
+  const f = favList()[fav.favIdx];
+  const i = S.favorites.indexOf(f);
+  if (i < 0) return toast("기본 경로는 지울 수 없습니다");
+  if (!await ask({ title: "즐겨찾기 삭제", message: f.label || f.dir, ok: "삭제", danger: true })) return;
+  S.favorites.splice(i, 1);
+  await api("fs/favorites", { favorites: S.favorites });
+  fav.favIdx = 0;
+  fav.setTop(favList()[0].dir);
+}
+
+// ================================================================ transfer (copy into the media pane folder)
+async function transfer(src, paths) {
+  const body = { root: src.root, paths, dst_root: "media", dst_dir: media.dir, overwrite: false };
   try {
-    await api(`fs/${move ? "move" : "copy"}`, body);
+    await api("fs/copy", body);
   } catch (e) {
     if (e.status === 409) {
-      const ok = await ask({ title: "덮어쓰기?", message: "대상 폴더에 같은 이름이 있습니다.", list: e.detail.conflicts, ok: "덮어쓰기", danger: true });
-      if (ok) await api(`fs/${move ? "move" : "copy"}`, { ...body, overwrite: true }).catch(x => toast(x.message));
-    } else toast(`${verb}: ${e.message}`);
+      if (await ask({ title: "덮어쓰기?", message: `${media.absLabel(media.dir)} 에 같은 이름이 있습니다.`, list: e.detail.conflicts, ok: "덮어쓰기", danger: true }))
+        await api("fs/copy", { ...body, overwrite: true }).catch(x => toast(x.message));
+    } else toast(`전송: ${e.message}`);
   }
 }
 
-let uploadSeq = 0;
+let upSeq = 0;
 async function upload(pane, files) {
   for (const f of files) {
     let overwrite = false;
@@ -313,8 +340,8 @@ async function upload(pane, files) {
       if (!await ask({ title: "덮어쓰기?", message: `${f.name} 이(가) 이미 있습니다.`, ok: "덮어쓰기", danger: true })) continue;
       overwrite = true;
     }
-    const id = `u${++uploadSeq}`;
-    const job = { id, kind: "upload", desc: `${f.name} → ${pane.root}:/${pane.dir}`, status: "running", total: f.size, done: 0 };
+    const id = `u${++upSeq}`;
+    const job = { id, kind: "upload", src: `PC: ${f.name}`, dst: pane.absLabel(pane.dir), status: "running", total: f.size, done: 0, started: Date.now() / 1000 };
     S.jobs.set(id, job); renderJobs();
     await new Promise(resolve => {
       const x = new XMLHttpRequest();
@@ -322,8 +349,8 @@ async function upload(pane, files) {
       x.upload.onprogress = e => { job.done = e.loaded; renderJobs(); };
       x.onload = () => {
         job.status = x.status < 300 ? "done" : "error";
-        if (x.status >= 300) { try { job.error = JSON.parse(x.responseText).detail?.message || JSON.parse(x.responseText).detail; } catch { job.error = x.statusText; } }
-        job.done = job.status === "done" ? f.size : job.done;
+        if (x.status >= 300) { try { const d = JSON.parse(x.responseText).detail; job.error = d?.message || d; } catch { job.error = x.statusText; } }
+        if (job.status === "done") job.done = f.size;
         renderJobs(); resolve();
       };
       x.onerror = () => { job.status = "error"; job.error = "network error"; renderJobs(); resolve(); };
@@ -333,71 +360,66 @@ async function upload(pane, files) {
   }
 }
 
+const ST = { running: "전송중", done: "전송완료", error: "오류", cancelled: "취소" };
 function renderJobs() {
-  const box = $("#jobs");
-  const list = [...S.jobs.values()].sort((a, b) => (a.status === "running") - (b.status === "running") || 0).reverse().slice(0, 12);
-  box.classList.toggle("hidden", !list.length);
-  box.innerHTML = list.map(j => {
+  const list = [...S.jobs.values()].filter(j => j.kind !== "delete").sort((a, b) => (b.started || 0) - (a.started || 0));
+  $("#xbody").innerHTML = list.map(j => {
     const pct = j.total ? Math.min(100, j.done / j.total * 100) : (j.status === "done" ? 100 : 0);
-    const prog = j.kind === "delete" ? `${j.done}/${j.total}` : `${fmtBytes(j.done)} / ${fmtBytes(j.total)}`;
-    return `<div class="job ${j.status}">
-      <span>${esc(j.kind)}</span>
-      <span title="${esc(j.desc)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(j.desc)} ${j.error ? `<span class="err">${esc(j.error)}</span>` : ""}</span>
-      <span class="mono"><span class="bar"><i style="width:${pct}%"></i></span>${prog} ${j.status === "running" ? Math.round(pct) + "%" : esc(j.status)}</span>
-      ${j.status === "running" ? `<button class="ibtn" data-cancel="${j.id}">취소</button>` : `<button class="ibtn" data-dismiss="${j.id}">닫기</button>`}
-    </div>`;
-  }).join("");
-  $$("[data-cancel]", box).forEach(b => b.onclick = () => {
-    const j = S.jobs.get(isNaN(b.dataset.cancel) ? b.dataset.cancel : Number(b.dataset.cancel));
-    if (j?.xhr) j.xhr.abort(); else api(`fs/jobs/${b.dataset.cancel}/cancel`, {});
-  });
-  $$("[data-dismiss]", box).forEach(b => b.onclick = () => {
-    S.jobs.delete(isNaN(b.dataset.dismiss) ? b.dataset.dismiss : Number(b.dataset.dismiss)); renderJobs();
+    const id = esc(String(j.id));
+    return `<tr class="${j.status}" title="${esc(j.error || "")}">
+      <td title="${esc(j.src || j.desc)}">${esc(j.src || j.desc)}</td>
+      <td class="c arrow">${j.kind === "move" ? "⇒" : "➜"}</td>
+      <td title="${esc(j.dst || "")}">${esc(j.dst || "")}</td>
+      <td><div class="xbar"><span class="b"><i style="width:${pct}%"></i></span><span class="mono">${Math.round(pct)}%</span></div></td>
+      <td class="r mono">${fmtBytes(j.total || 0)}</td>
+      <td class="c st">${esc(ST[j.status] || j.status)}${j.error ? " ⚠" : ""}</td>
+      <td>${j.status === "running" ? `<button class="ibtn" data-cancel="${id}">취소</button>` : ""}</td></tr>`;
+  }).join("") || '<tr><td colspan="7" class="dim" style="text-align:center">전송 내역이 없습니다 · 아래 판넬에서 선택 후 "전송하기" (F5) 또는 위 판넬로 끌어다 놓기</td></tr>';
+  $$("[data-cancel]").forEach(b => b.onclick = () => {
+    const k = isNaN(b.dataset.cancel) ? b.dataset.cancel : Number(b.dataset.cancel);
+    const j = S.jobs.get(k);
+    if (j?.xhr) j.xhr.abort(); else api(`fs/jobs/${k}/cancel`, {});
   });
 }
+$("#x-clear").onclick = () => { for (const [k, j] of S.jobs) if (j.status !== "running") S.jobs.delete(k); renderJobs(); };
 
-// ---------------------------------------------------------------- favorites
-async function toggleFav(p) {
-  const i = S.favorites.findIndex(f => f.root === p.root && f.dir === p.dir);
-  if (i >= 0) S.favorites.splice(i, 1);
-  else {
-    const label = await ask({ title: "즐겨찾기 추가", message: `${p.base}/${p.dir}`, input: p.dir.split("/").pop() || p.base, ok: "추가" });
-    if (label === null) return;
-    S.favorites.push({ root: p.root, dir: p.dir, label });
-  }
-  await api("fs/favorites", { favorites: S.favorites }).catch(e => toast(e.message));
-}
-
-// ---------------------------------------------------------------- lazy duration probe (media pane)
-let probeQueue = [], probing = 0;
+// ================================================================ duration probe (media pane)
+const probeQ = []; let probing = 0;
 function probeVisible(p) {
   for (const it of p.view) {
     if (it.dir || !it.kind || it.kind === "image" || probeCache.has(it.path)) continue;
-    probeCache.set(it.path, "pending");
-    probeQueue.push(it.path);
+    probeCache.set(it.path, "pending"); probeQ.push(it.path);
   }
   pump();
 }
 function pump() {
-  while (probing < 3 && probeQueue.length) {
-    const path = probeQueue.shift();
-    probing++;
-    api(`media/probe?file=${encodeURIComponent(path)}`)
-      .then(r => probeCache.set(path, r)).catch(() => probeCache.set(path, "error"))
-      .finally(() => { probing--; repaintSoon(); pump(); });
+  while (probing < 3 && probeQ.length) {
+    const path = probeQ.shift(); probing++;
+    api(`media/probe?file=${encodeURIComponent(path)}`).then(r => probeCache.set(path, r)).catch(() => probeCache.set(path, "error"))
+      .finally(() => { probing--; clearTimeout(pump.t); pump.t = setTimeout(() => media.paint(), 150); pump(); });
   }
 }
-let repaintT;
-function repaintSoon() { clearTimeout(repaintT); repaintT = setTimeout(() => panes[0].paint(), 150); }
 
-// ---------------------------------------------------------------- player window links
+// ================================================================ playback windows
 function renderPlayers() {
   $("#players").innerHTML = (S.info?.channels ?? []).map(c =>
-    `<button class="linkbtn" data-open="${c.channel_index}" title="재생 제어창 열기">${esc(c.name)} ↗</button>`).join("");
+    `<button class="ubtn sm" data-open="${c.channel_index}" title="재생 창 열기">${esc(c.name)} ↗</button>`).join("");
   $$("[data-open]").forEach(b => b.onclick = () => window.open(`/player.html?ch=${b.dataset.open}`, `sendust_player_${b.dataset.open}`));
 }
+function renderSendTo() {
+  const box = $(".sendto", media.el);
+  if (!S.info) return;
+  const files = media.selected().filter(x => !x.dir && x.kind);
+  box.innerHTML = S.info.channels.map(c =>
+    `<button class="ubtn sm cyan" data-ch="${c.channel_index}" ${files.length ? "" : "disabled"} title="선택한 파일을 ${esc(c.name)} 플레이리스트 끝에 추가">→ ${esc(c.name)}</button>`).join("");
+  $$("[data-ch]", box).forEach(b => b.onclick = async () => {
+    const fs = media.selected().filter(x => !x.dir && x.kind).map(x => x.path);
+    try { await api(`ch/${b.dataset.ch}/playlist/add`, { files: fs }); toast(`${fs.length} clip(s) → ${b.textContent.slice(2)}`, 1500); }
+    catch (e) { toast(e.message); }
+  });
+}
 
-// ---------------------------------------------------------------- WS
+// ================================================================ WS
 const dot = (id, on) => $(id).classList.toggle("on", !!on);
 let started = false;
 connectWs(async m => {
@@ -406,24 +428,26 @@ connectWs(async m => {
     document.title = `${m.info.title} [Media Browser] {${m.info.stamp}}`;
     S.favorites = m.favorites || [];
     for (const j of m.jobs || []) S.jobs.set(j.id, j);
-    renderJobs();
-    renderPlayers();
-    addLogout(m.info, $(".conn"));
+    renderJobs(); renderPlayers();
+    addLogout(m.info, $(".ub-title"));
     if (!started) {
       started = true;
-      try { S.session = (await api("session")).session || {}; } catch { S.session = {}; }
-      for (const p of panes) {
-        const s = S.session.browser?.[p.root];
-        if (s) { p.sort = s.sort || "name"; p.desc = !!s.desc; }
-        await p.open(s?.dir || "");
-      }
+      try { S.session = (await api("session")).session?.browser2 || {}; } catch { S.session = {}; }
+      for (const p of panes) { const s = S.session.sort?.[p.el.id]; if (s) [p.sort, p.desc] = [s[0], !!s[1]]; }
+      fav.favIdx = Math.min(S.session.favIdx ?? 0, favList().length - 1);
+      renderFavSel();
+      await media.setTop("");
+      if (S.session.mediaDir) await media.open(S.session.mediaDir);
+      await fav.setTop(favList()[fav.favIdx].dir);
+      if (S.session.favDir && S.session.favDir.startsWith(fav.top)) await fav.open(S.session.favDir);
     }
   }
   if (m.type === "hello" || m.type === "tick") dot("#d-amcp", m.amcp);
   if (m.type === "amcp") dot("#d-amcp", m.connected);
-  if (m.type === "favorites") { S.favorites = m.favorites; panes.forEach(p => p.renderFavs()); }
+  if (m.type === "favorites") { S.favorites = m.favorites; renderFavSel(); }
   if (m.type === "job") {
-    S.jobs.set(m.job.id, m.job); renderJobs();
+    const prev = S.jobs.get(m.job.id);
+    S.jobs.set(m.job.id, { ...prev, ...m.job }); renderJobs();
     if (m.refresh) panes.forEach(p => p.open(p.dir, true));
   }
   if (m.type === "fs") panes.forEach(p => { if (p.root === m.root && p.dir === m.dir) p.open(p.dir, true); });

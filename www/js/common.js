@@ -119,3 +119,9 @@ export function addLogout(info, container) {
   b.onclick = async () => { await fetch("/api/v1/logout", { method: "POST" }); location.href = "/login.html"; };
   container.append(b);
 }
+
+// launcher "모두 종료": every window opened by a launcher closes itself (window.close() only works for
+// script-opened windows, so a tab the user opened by hand stays)
+if ("BroadcastChannel" in window && !location.pathname.endsWith("launcher.html")) {
+  new BroadcastChannel("sendust").onmessage = e => { if (e.data?.cmd === "close") window.close(); };
+}

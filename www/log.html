@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist [Log]</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ump.css">
+<style>
+  .lg { display: flex; flex-direction: column; height: 100vh; }
+  .lg-title { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: #111; border-bottom: 1px solid var(--line); flex: none; }
+  .lg-title .t { font-size: 18px; font-weight: 700; }
+  .lg-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: #1f1f1f; border-bottom: 1px solid var(--line); flex: none; font-size: 14px; }
+  .lg-bar select, .lg-bar input[type=search] { height: 30px; background: #2a3037; color: var(--fg); border: 1px solid var(--btn-edge); border-radius: 4px; padding: 0 6px; }
+  .lg-bar input[type=search] { width: 240px; }
+  .sp { flex: 1; }
+  .lg-list { flex: 1; overflow: auto; background: #202020; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+  th { position: sticky; top: 0; background: #2a2a2a; text-align: left; padding: 4px 8px; font-weight: 600; color: var(--dim); }
+  td { padding: 3px 8px; border-bottom: 1px solid #2a2a2a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  td.msg { white-space: pre-wrap; word-break: break-all; }
+  tr.WARNING td { color: var(--warn); } tr.ERROR td, tr.CRITICAL td, tr.error td { color: var(--bad); }
+  .foot { display: flex; gap: 14px; align-items: center; padding: 3px 10px; background: #111; font-size: 12px; color: var(--dim); flex: none; }
+</style>
+</head>
+<body>
+<div class="lg">
+  <header class="lg-title"><span class="t">Log Viewer</span><span class="sp"></span><span class="dim mono" id="count"></span></header>
+  <div class="lg-bar">
+    <label>Source <select id="f-src"><option value="">All</option></select></label>
+    <label>Level <select id="f-lvl"><option value="">All</option><option value="WARNING">Warning +</option><option value="ERROR">Error</option></select></label>
+    <input type="search" id="f-txt" placeholder="message filter">
+    <label class="uchk"><input type="checkbox" id="f-amcp"> AMCP 명령 포함</label>
+    <span class="sp"></span>
+    <label class="uchk"><input type="checkbox" id="f-follow" checked> 자동 스크롤</label>
+    <button class="ubtn sm" id="b-clear" title="화면에서만 지움 (서버 로그는 유지)">Clear</button>
+  </div>
+  <div class="lg-list" id="list"><table>
+    <colgroup><col style="width:170px"><col style="width:110px"><col style="width:90px"><col></colgroup>
+    <thead><tr><th>Time</th><th>Source</th><th>Level</th><th>Message</th></tr></thead><tbody id="tb"></tbody></table></div>
+  <div class="foot"><span><i class="dot" id="d-ws"></i><span id="conn">Disconnected</span></span><span id="host"></span><span class="sp"></span><span>backend logs/backend.log · CasparCG ~/casparcgserver/log</span></div>
+</div>
+<script type="module">
+import { $, connectWs, esc } from "./js/common.js";
+const MAX = 3000;
+let rows = [], clearedAt = 0;
+const RANK = { DEBUG: 0, INFO: 1, WARNING: 2, ERROR: 3, CRITICAL: 4, error: 3, info: 1 };
+const p2 = n => String(n).padStart(2, "0");
+const t2s = t => { const d = new Date(t * 1000); return `${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, "0")}`; };
+
+function pass(e) {
+  if (e.t < clearedAt) return false;
+  const src = $("#f-src").value, lvl = $("#f-lvl").value, txt = $("#f-txt").value.toLowerCase();
+  if (!$("#f-amcp").checked && e.src === "amcp" && e.level === "INFO") return false;
+  if (src && e.src !== src) return false;
+  if (lvl && (RANK[e.level] ?? 1) < RANK[lvl]) return false;
+  if (txt && !e.msg.toLowerCase().includes(txt)) return false;
+  return true;
+}
+const rowHtml = e => `<tr class="${esc(e.level)}"><td class="mono">${t2s(e.t)}</td><td>${esc(e.src)}</td><td>${esc(e.level)}</td><td class="msg">${esc(e.msg)}</td></tr>`;
+function renderAll() {
+  const v = rows.filter(pass);
+  $("#tb").innerHTML = v.map(rowHtml).join("");
+  $("#count").textContent = `${v.length} / ${rows.length}`;
+  if ($("#f-follow").checked) $("#list").scrollTop = 1e9;
+}
+function renderSources() {
+  const cur = $("#f-src").value;
+  const srcs = [...new Set(rows.map(e => e.src))].sort();
+  $("#f-src").innerHTML = '<option value="">All</option>' + srcs.map(s => `<option ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
+}
+function add(e) {
+  rows.push(e);
+  if (rows.length > MAX) rows.splice(0, rows.length - MAX);
+  if (![...$("#f-src").options].some(o => o.value === e.src)) renderSources();
+  if (!pass(e)) return;
+  $("#tb").insertAdjacentHTML("beforeend", rowHtml(e));
+  const tb = $("#tb");
+  while (tb.childElementCount > MAX) tb.firstChild.remove();
+  $("#count").textContent = `${tb.childElementCount} / ${rows.length}`;
+  if ($("#f-follow").checked) $("#list").scrollTop = 1e9;
+}
+for (const id of ["#f-src", "#f-lvl", "#f-amcp"]) $(id).onchange = renderAll;
+$("#f-txt").oninput = renderAll;
+$("#b-clear").onclick = () => { clearedAt = Date.now() / 1000; renderAll(); };
+
+connectWs(m => {
+  if (m.type === "hello") {
+    document.title = `${m.info.title} [Log] {${m.info.stamp}}`;
+    $("#host").textContent = m.info.host;
+    rows = (m.syslog || []).slice();
+    renderSources(); renderAll();
+  }
+  if (m.type === "syslog") add(m.entry);
+}, on => { $("#d-ws").classList.toggle("on", on); $("#conn").textContent = on ? "Connected" : "Disconnected"; });
+</script>
+</body>
+</html>

@@ -43,8 +43,10 @@ class Playlist:
         self.enabled = False
         self.slot = "1"
         self.current_id: str | None = None
+        self.name = "list1"
         self.version = 0
         self._state_file = DATA / f"ch{ch_idx}_current.json"
+        self._names: dict = {}   # (slot file, mtime) -> saved list name
         self._restore()
 
     # ---- persistence of the working list -----------------------------------
@@ -55,6 +57,7 @@ class Playlist:
             self.enabled = bool(d.get("enabled", False))
             self.slot = d.get("slot", "1") if d.get("slot") in SLOTS else "1"
             self.current_id = d.get("current_id")
+            self.name = d.get("name") or f"list{self.slot}"
         except (OSError, ValueError):
             pass
 
@@ -62,12 +65,12 @@ class Playlist:
         self.version += 1
         try:
             _atomic_write(self._state_file, {"items": self.items, "enabled": self.enabled, "slot": self.slot,
-                                             "current_id": self.current_id})
+                                             "current_id": self.current_id, "name": self.name})
         except OSError:
             pass
 
     def view(self) -> dict:
-        return {"ch": self.ch, "items": self.items, "enabled": self.enabled, "slot": self.slot,
+        return {"ch": self.ch, "items": self.items, "enabled": self.enabled, "slot": self.slot, "name": self.name,
                 "current_id": self.current_id, "version": self.version, "slots": self.slot_info()}
 
     # ---- lookup -------------------------------------------------------------
@@ -195,7 +198,15 @@ class Playlist:
             try:
                 p = self.slot_path(s)
                 st = p.stat()
-                out[s] = {"mtime": int(st.st_mtime)}
+                key = (str(p), st.st_mtime)
+                name = self._names.get(key)
+                if name is None:
+                    try:
+                        name = json.loads(p.read_text()).get("name") or ""
+                    except (OSError, ValueError):
+                        name = ""
+                    self._names[key] = name
+                out[s] = {"mtime": int(st.st_mtime), "name": name}
             except (OSError, ValueError):
                 out[s] = None
         return out
@@ -209,7 +220,7 @@ class Playlist:
     def save(self, slot: str | None = None):
         slot = slot or self.slot
         data = {
-            "format": "sendust_playlist/1", "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "format": "sendust_playlist/1", "name": self.name, "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "host": socket.gethostname(), "media_path": str(self.media.root),
             "items": [{"type": "pause"} if it["type"] == "pause" else
                       {"type": "clip", "file": it["file"], "in": it["in"], "out": it["out"]} for it in self.items],
@@ -236,6 +247,14 @@ class Playlist:
                               "missing": True})
         self.items = items
         self.slot = slot
+        self.name = d.get("name") or f"list{slot}"
         self.current_id = None
         self.changed()
         return missing
+
+    def rename(self, name: str):
+        name = (name or "").strip()[:60]
+        if not name:
+            raise ValueError("empty name")
+        self.name = name
+        self.changed()

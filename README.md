@@ -23,12 +23,16 @@ headless Ubuntu 서버에서 백엔드(FastAPI)와 CasparCG 가 돌고, 운용�
 처음 설치: `python3 -m venv .venv && .venv/bin/pip install fastapi 'uvicorn[standard]' python-multipart`.
 필요: ffmpeg/ffprobe, CasparCG 2.5, mediamtx(SDI 프리뷰), `libnvidia-gl-580`(CasparCG GPU 합성).
 
+UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(uMP 스타일)다.
+
 | 창 | 주소 |
 |---|---|
-| 미디어 브라우저 | `http://<서버>:8300/` |
-| 재생 제어창 | `/player.html?ch=<channel_index>` (브라우저 상단 버튼으로 열기) |
-| VGA 프리뷰 | 플레이리스트에서 MXF 항목 선택 → PREVIEW (V) |
-| SDI 프리뷰 | 재생 제어창 상단 `SDI Preview` |
+| 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
+| 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2), TC/DUR/EL/REM, IN/OUT, 트랜스포트, Jog/Shuttle, 접이식 확대 타임라인, 리스트 |
+| 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황 |
+| 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터) |
+| VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
+| SDI 프리뷰 (단독) | `/sdi.html?ch=<idx>` |
 
 창 제목: `sendust playlist [채널명] {마지막 커밋 시각}`.
 
@@ -131,6 +135,8 @@ gang UI 의 origin 을 넣는다.
 | `wasm/mxfdec.c`, `www/vgap/` | VGA 프리뷰용 libavcodec wasm 디코더와 MXF 플레이어 |
 | `backend/sdi_preview.py`, `www/sdi.html` | SDI 프리뷰 (WebRTC) |
 | `backend/ext.py`, `backend/auth.py` | 외부 제어, 인증 |
+| `backend/sysinfo.py`, `backend/loghub.py` | 시스템 정보(mediarouter 와 동일), 로그 뷰어용 로그 버퍼 |
+| `www/launcher.html`, `www/log.html`, `www/css/ump.css` | 런처, 로그 뷰어, 부조정실용 스타일 |
 
 ## 알아 둘 CasparCG 2.5 특성 (실측)
 

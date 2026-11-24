@@ -480,6 +480,8 @@ class Player:
                         "error" if missing else "info")
         elif op == "cue":
             await self.cue(b.id, play=bool(b.on))
+        elif op == "rename":
+            pl.rename(b.name or "")
         else:
             raise ValueError(f"unknown playlist op {op}")
         self.pl_changed()
