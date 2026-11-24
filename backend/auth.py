@@ -15,7 +15,8 @@ from .config import ROOT
 COOKIE = "sp_session"
 MAX_AGE = 30 * 86400
 SECRET_FILE = ROOT / "data" / "secret"
-PUBLIC_PREFIXES = ("/login.html", "/api/v1/login", "/api/v1/logout", "/css/", "/favicon", "/ext/")
+PUBLIC_PREFIXES = ("/login.html", "/api/v1/login", "/api/v1/logout", "/css/", "/favicon", "/ext/",
+                   "/manifest.json", "/icons/")   # app manifest is fetched without the login cookie
 LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 

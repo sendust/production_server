@@ -1,6 +1,6 @@
 // Media browser (uBrowser-like): upper pane = CasparCG media path, lower pane = one favourite path,
 // each with a folder tree and a file list; "전송하기" copies the lower selection into the upper folder.
-import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout } from "./common.js";
+import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout, openWin } from "./common.js";
 import { initTheme } from "./theme.js";
 
 const S = { info: null, favorites: [], jobs: new Map(), session: {}, active: null };
@@ -405,7 +405,7 @@ function pump() {
 function renderPlayers() {
   $("#players").innerHTML = (S.info?.channels ?? []).map(c =>
     `<button class="ubtn sm" data-open="${c.channel_index}" title="재생 창 열기">${esc(c.name)} ↗</button>`).join("");
-  $$("[data-open]").forEach(b => b.onclick = () => window.open(`/player.html?ch=${b.dataset.open}`, `sendust_player_${b.dataset.open}`));
+  $$("[data-open]").forEach(b => b.onclick = () => openWin(`/player.html?ch=${b.dataset.open}`, `sendust_player_${b.dataset.open}`, 885, 1050));
 }
 function renderSendTo() {
   const box = $(".sendto", media.el);

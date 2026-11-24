@@ -1,5 +1,5 @@
 // Playback window (uMP-style layout, sized for HD): one page per playback channel (?ch=<channel_index>).
-import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, esc, toast, addLogout } from "./common.js";
+import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, esc, toast, addLogout, openWin } from "./common.js";
 import { initTheme } from "./theme.js";
 import { PlaylistUI, secTc } from "./playlist_ui.js";
 import { Scenes } from "./scenes.js";
@@ -298,7 +298,7 @@ $("#btn-end").onclick = () => loaded() && seekTo(loaded().out - 1);
 $("#btn-delin").onclick = () => loaded() && cmd("marks", { fin: 0 });
 $("#btn-delout").onclick = () => loaded() && cmd("marks", { fout: loaded().info.frames });
 $("#loopmode").onchange = e => cmd("loop", { mode: e.target.value });
-const openBrowser = () => window.open("/browser.html", "sendust_browser");
+const openBrowser = () => openWin("/browser.html", "sendust_browser", 1400, 980);
 $("#btn-browser").onclick = openBrowser;
 
 // preview area height: drag the bar under it (remembered per browser)

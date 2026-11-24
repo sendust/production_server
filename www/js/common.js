@@ -134,6 +134,18 @@ export function addLogout(info, container) {
   container.append(b);
 }
 
+// Every sendust window is opened as a popup (never a tab): when the launcher runs as an app window
+// (chrome --app=… or "Create shortcut → Open as window"), its popups are app windows too -- no
+// address bar. Same name = focus the window that is already open.
+export function openWin(url, name, w, h) {
+  const W = Math.min(w, screen.availWidth), H = Math.min(h, screen.availHeight);
+  const x = (screen.availLeft ?? 0) + Math.max(0, Math.round((screen.availWidth - W) / 2));
+  const y = (screen.availTop ?? 0) + Math.max(0, Math.round((screen.availHeight - H) / 2));
+  const win = window.open(url, name, `popup,left=${x},top=${y},width=${W},height=${H}`);
+  win?.focus();
+  return win;
+}
+
 // launcher "모두 종료": every window opened by a launcher closes itself (window.close() only works for
 // script-opened windows, so a tab the user opened by hand stays)
 if ("BroadcastChannel" in window && !location.pathname.endsWith("launcher.html")) {

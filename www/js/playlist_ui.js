@@ -1,5 +1,5 @@
 // Playlist panel of the playback window.
-import { $, $$, api, esc, ask, toast, durTc, framesToTc, tcToFrames, DND_MEDIA } from "./common.js";
+import { $, $$, api, esc, ask, toast, durTc, framesToTc, tcToFrames, DND_MEDIA, openWin } from "./common.js";
 
 const DND_PL = "application/x-sendust-plitem";
 const SLOTS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D"];
@@ -145,7 +145,7 @@ export class PlaylistUI {
 
   openPreview() {
     const it = this.previewItem();
-    if (it) window.open(`/preview.html?ch=${this.ch}&id=${it.id}`, `sendust_preview_${this.ch}`);
+    if (it) openWin(`/preview.html?ch=${this.ch}&id=${it.id}`, `sendust_preview_${this.ch}`, 1280, 900);
   }
 
   selectedIds() { return this.pl ? this.pl.items.filter(i => this.sel.has(i.id)).map(i => i.id) : []; }

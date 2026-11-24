@@ -1,0 +1,10 @@
+{
+  "name": "sendust playlist",
+  "short_name": "sendust",
+  "start_url": "/launcher.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#2a2a2a",
+  "theme_color": "#111111",
+  "icons": [{ "src": "/icons/sendust.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
