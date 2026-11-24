@@ -14,11 +14,24 @@
   <div class="sysbox" id="sys">
     <div class="r"><span class="k">CasparCG</span><span id="s-amcp" class="bad">●</span></div>
     <div class="r"><span class="k">OSC</span><span id="s-osc" class="bad">●</span></div>
-    <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
-    <div class="r"><span class="k">RAM</span><span id="s-mem">-</span></div>
-    <div class="r"><span class="k">GPU</span><span id="s-gpu">-</span></div>
-    <div class="r"><span class="k">GPU °C</span><span id="s-gput">-</span></div>
-    <div class="r"><span class="k">Media</span><span id="s-disk">-</span></div>
+    <div class="sec">
+      <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
+      <canvas class="g g-cpu" id="g-cpu"></canvas>
+    </div>
+    <div class="r"><span class="k">RAM free</span><span id="s-mem">-</span></div>
+    <div class="sec">
+      <div class="r"><span class="k">GPU</span><span id="s-gput">-</span></div>
+      <div class="gb" id="gb-gpu"><span>GPU</span><i><b></b></i><em>-</em></div>
+      <div class="gb" id="gb-enc"><span>ENC</span><i><b></b></i><em>-</em></div>
+      <div class="gb" id="gb-dec"><span>DEC</span><i><b></b></i><em>-</em></div>
+      <div class="gb" id="gb-vram"><span>VRAM</span><i><b></b></i><em>-</em></div>
+    </div>
+    <div class="sec">
+      <div class="r"><span class="k">Media</span><span id="s-disk">-</span></div>
+      <div class="gb disk" id="gb-disk"><i><b></b></i></div>
+      <div class="sub" id="s-disk2"></div>
+    </div>
+    <div id="nics"></div>
   </div>
 
   <button class="ubtn" id="b-log" title="로그 뷰어 창">로그 뷰어</button>
@@ -86,6 +99,79 @@ function renderChannels() {
 }
 
 const pct = v => v == null ? "-" : `${v.toFixed(0)}%`;
+const RX = "#3987e5", TX = "#d95926", BAR = "#3987e5", TRACK = "#2a2d31";   // dark-validated pair (dataviz)
+const bps = v => v == null ? "-" : v >= 1e9 ? `${(v / 1e9).toFixed(2)}G` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${(v / 1e3).toFixed(0)}k`;
+const nicHist = new Map();   // name -> [{rx, tx}] last 60 s
+
+function canvas2d(c) {
+  const dpr = devicePixelRatio || 1, r = c.getBoundingClientRect();
+  if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) {
+    c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+  }
+  const g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, r.width, r.height);
+  return [g, r.width, r.height];
+}
+
+// one bar per logical core, height = load
+function drawCpu(per) {
+  const c = $("#g-cpu");
+  const [g, w, h] = canvas2d(c);
+  if (!per?.length) return;
+  const n = per.length, gap = n > 48 ? 0 : 1, bw = Math.max(1, (w - gap * (n - 1)) / n);
+  per.forEach((v, i) => {
+    const x = i * (bw + gap);
+    g.fillStyle = TRACK; g.fillRect(x, 0, bw, h);
+    const bh = Math.max(v > 0 ? 1 : 0, h * Math.min(100, v) / 100);
+    g.fillStyle = v >= 90 ? "#e66767" : BAR;
+    g.fillRect(x, h - bh, bw, bh);
+  });
+  c.title = per.map((v, i) => `core ${i}: ${v.toFixed(0)}%`).join("\n");
+}
+
+function setBar(id, frac, text, title) {
+  const el = $(id);
+  el.querySelector("b").style.width = `${Math.max(0, Math.min(1, frac || 0)) * 100}%`;
+  const em = el.querySelector("em");
+  if (em) em.textContent = text;
+  el.title = title || text;
+}
+
+// RX / TX of the last 60 s, both on one Mb/s scale
+function drawNics(nics) {
+  const box = $("#nics");
+  const up = nics.filter(n => n.ips.length);
+  const names = up.map(n => n.name).join(",");
+  if (box.dataset.names !== names) {
+    box.dataset.names = names;
+    box.innerHTML = up.map(n => `<div class="sec nic" data-nic="${esc(n.name)}">
+      <div class="r"><span class="k">${esc(n.name)}</span><span class="sub">${n.speed_mbps ? (n.speed_mbps >= 1000 ? n.speed_mbps / 1000 + "G" : n.speed_mbps + "M") : ""}</span></div>
+      <canvas class="g g-nic"></canvas>
+      <div class="lg"><span><i style="background:${RX}"></i>RX <b class="rx">-</b></span><span><i style="background:${TX}"></i>TX <b class="tx">-</b></span></div></div>`).join("");
+  }
+  for (const n of up) {
+    const h = nicHist.get(n.name) || [];
+    h.push({ rx: n.rx_bps, tx: n.tx_bps });
+    if (h.length > 60) h.shift();
+    nicHist.set(n.name, h);
+    const el = box.querySelector(`[data-nic="${CSS.escape(n.name)}"]`);
+    el.querySelector(".rx").textContent = bps(n.rx_bps);
+    el.querySelector(".tx").textContent = bps(n.tx_bps);
+    const c = el.querySelector("canvas");
+    const [g, w, hh] = canvas2d(c);
+    const max = Math.max(1e6, ...h.map(p => Math.max(p.rx, p.tx))) * 1.1;
+    g.fillStyle = TRACK; g.fillRect(0, hh - 1, w, 1);
+    const line = (key, col) => {
+      g.strokeStyle = col; g.lineWidth = 1.5; g.lineJoin = "round"; g.beginPath();
+      h.forEach((p, i) => { const x = w - (h.length - 1 - i) * (w / 59), y = hh - 1 - (p[key] / max) * (hh - 3);
+        i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.stroke();
+    };
+    line("rx", RX); line("tx", TX);
+    c.title = `${n.name} ${n.ips.join(", ")}\nRX ${bps(n.rx_bps)}b/s  TX ${bps(n.tx_bps)}b/s\nscale 0–${bps(max)}b/s, last 60 s`;
+  }
+}
 connectWs(m => {
   if (m.type === "hello") {
     info = m.info;
@@ -104,13 +190,25 @@ connectWs(m => {
   $("#s-cpu").textContent = pct(sy.cpu_percent);
   $("#s-cpu").className = sy.cpu_percent > 85 ? "bad" : sy.cpu_percent > 65 ? "warn" : "";
   $("#s-mem").textContent = sy.mem_available != null ? fmtBytes(sy.mem_available) : "-";
+  drawCpu(sy.cpu_per);
   const g = (sy.gpus || [])[0];
-  $("#s-gpu").textContent = g ? `${pct(g.util_gpu)} E${pct(g.util_enc)}` : "-";
-  $("#s-gput").textContent = g?.temp_c != null ? `${g.temp_c.toFixed(0)}°C` : "-";
+  $("#s-gput").textContent = g ? (g.temp_c != null ? `${g.temp_c.toFixed(0)}°C` : "") : "none";
   $("#s-gput").className = g?.temp_c > 85 ? "bad" : g?.temp_c > 75 ? "warn" : "";
+  $("#s-gput").title = g ? `${g.name}${g.power_w != null ? ` · ${g.power_w.toFixed(0)} W` : ""}` : "";
+  setBar("#gb-gpu", (g?.util_gpu ?? 0) / 100, pct(g?.util_gpu), "GPU 3D/compute");
+  setBar("#gb-enc", (g?.util_enc ?? 0) / 100, pct(g?.util_enc), "NVENC");
+  setBar("#gb-dec", (g?.util_dec ?? 0) / 100, pct(g?.util_dec), "NVDEC");
+  const vr = g?.mem_total_mib ? g.mem_used_mib / g.mem_total_mib : 0;
+  setBar("#gb-vram", vr, g?.mem_total_mib ? `${(vr * 100).toFixed(0)}%` : "-",
+    g?.mem_total_mib ? `VRAM ${(g.mem_used_mib / 1024).toFixed(1)} / ${(g.mem_total_mib / 1024).toFixed(1)} GB` : "");
   const d = s.media_disk;
-  $("#s-disk").textContent = d ? `${fmtBytes(d.free)}` : "-";
-  $("#s-disk").className = d && d.free / d.total < 0.05 ? "bad" : d && d.free / d.total < 0.15 ? "warn" : "";
+  const freeFrac = d ? d.free / d.total : 1;
+  $("#s-disk").textContent = d ? (freeFrac < 0.05 ? "LOW" : freeFrac < 0.15 ? "low" : "") : "-";
+  $("#s-disk").className = freeFrac < 0.05 ? "bad" : freeFrac < 0.15 ? "warn" : "";
+  setBar("#gb-disk", d ? 1 - freeFrac : 0, "", d ? `used ${fmtBytes(d.total - d.free)} / ${fmtBytes(d.total)}` : "");
+  $("#gb-disk").classList.toggle("low", freeFrac < 0.15);
+  $("#s-disk2").textContent = d ? `free ${fmtBytes(d.free)} / ${fmtBytes(d.total)}` : "";
+  drawNics(sy.nics || []);
   $("#sys").title = `${sy.hostname ?? ""}\n${sy.cpu_model ?? ""}\n${(sy.nics || []).map(n => `${n.name}: ${n.ips.join(", ")}`).join("\n")}`;
   $("#clock").textContent = (sy.time || "").slice(11, 19);
   if (s.players && JSON.stringify(s.players) !== JSON.stringify(players)) { players = s.players; renderChannels(); }

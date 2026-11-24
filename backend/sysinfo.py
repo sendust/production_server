@@ -210,6 +210,7 @@ class SysInfo(threading.Thread):
         snap.update({
             "time": time.strftime("%Y/%m/%d %H:%M.%S"),
             "cpu_percent": psutil.cpu_percent(None),
+            "cpu_per": psutil.cpu_percent(None, percpu=True),   # sendust playlist: per-core graph
             "load": os.getloadavg(),
             "ffmpeg_count": ff,
             "mem_total": vm.total,
@@ -222,6 +223,7 @@ class SysInfo(threading.Thread):
 
     def run(self):
         psutil.cpu_percent(None)
+        psutil.cpu_percent(None, percpu=True)
         while not self._stop.wait(1.0):
             try:
                 self.collect()
