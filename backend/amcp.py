@@ -7,6 +7,7 @@ import asyncio
 import logging
 
 log = logging.getLogger("amcp")
+IO_TIMEOUT = 8.0   # whole command/response exchange
 
 
 class AmcpError(Exception):
@@ -60,7 +61,9 @@ class Amcp:
                         await self._connect()
                 else:
                     await self.send("PING")
-            except (OSError, asyncio.TimeoutError, AmcpError) as e:
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:   # never let the keepalive die: it is what reconnects after a CasparCG restart
                 log.warning("keepalive: %s", e)
                 await self._close()
             await asyncio.sleep(2)
@@ -80,23 +83,29 @@ class Amcp:
                 except (OSError, asyncio.TimeoutError) as e:
                     raise AmcpError(0, f"not connected: {e}")
             try:
-                self._writer.write((cmd + "\r\n").encode("utf-8"))
-                await self._writer.drain()
-                head = await self._readline()
-                if head == "PONG":  # CasparCG answers PING without a status code
-                    return []
-                code = int(head[:3]) if head[:3].isdigit() else 0
-                data: list[str] = []
-                if code == 200:
-                    while (ln := await self._readline()) != "":
-                        data.append(ln)
-                elif code == 201:
-                    data.append(await self._readline())
-                elif code >= 400 or code == 0:
-                    raise AmcpError(code, f"{head} <- {cmd}")
+                # one deadline for the whole exchange: a peer that stops reading (CasparCG hung or
+                # writing a core dump) must not hold the lock -- and so every command -- forever
+                head, data = await asyncio.wait_for(self._exchange(cmd), IO_TIMEOUT)
             except (OSError, asyncio.TimeoutError, ConnectionError) as e:
                 await self._close()
-                raise AmcpError(0, f"io error: {e}")
+                raise AmcpError(0, f"io error: {e!r}")
             if cmd != "PING":
                 log.info("%s -> %s", cmd, head)
             return data
+
+    async def _exchange(self, cmd: str) -> tuple[str, list[str]]:
+        self._writer.write((cmd + "\r\n").encode("utf-8"))
+        await self._writer.drain()
+        head = await self._readline()
+        if head == "PONG":  # CasparCG answers PING without a status code
+            return head, []
+        code = int(head[:3]) if head[:3].isdigit() else 0
+        data: list[str] = []
+        if code == 200:
+            while (ln := await self._readline()) != "":
+                data.append(ln)
+        elif code == 201:
+            data.append(await self._readline())
+        elif code >= 400 or code == 0:
+            raise AmcpError(code, f"{head} <- {cmd}")
+        return head, data

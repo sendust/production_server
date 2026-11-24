@@ -134,7 +134,7 @@ body { background: var(--bg); }
 .sysbox .sec { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid #2a2a2a; }
 .sysbox .sub { color: var(--dim); font-size: 11px; text-align: right; }
 .sysbox canvas.g { width: 100%; display: block; }
-.sysbox .g-cpu { height: 34px; }
+.sysbox .g-cpu { height: 48px; }
 .sysbox .g-nic { height: 30px; }
 .gb { display: grid; grid-template-columns: 34px 1fr 32px; align-items: center; gap: 4px; font-size: 11px; color: var(--dim); }
 .gb i { display: block; height: 8px; background: #2a2d31; border-radius: 2px; overflow: hidden; }

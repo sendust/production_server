@@ -158,7 +158,7 @@ function renderStatic() {
   $("#btn-play").classList.toggle("on", p?.status === "playing");
   $("#btn-pause").classList.toggle("on", p?.status === "paused");
   renderInfo();
-  meter.setChannels(Math.min(l?.info.audio.channels || 8, 8));
+  meter.setChannels(l?.info.audio?.channels ?? 0);   // 8 slots fixed; missing channels greyed out
   $("#loopmode").value = p?.loop_mode ?? "none";
   renderPreview();
 }

@@ -84,13 +84,15 @@ export class Meter {
   }
 }
 
-// Compact meter: channels in `cols` columns of horizontal bars (1-4 left, 5-8 right), under the preview.
+// Compact meter: a fixed layout of `slots` bars in `cols` columns (1-4 left, 5-8 right), under the preview.
+// Channels the loaded clip does not have (setChannels) stay in place, greyed out, so the layout never shifts.
 export class GridMeter {
-  constructor(canvas, cols = 2) {
+  constructor(canvas, cols = 2, slots = 8) {
     this.c = canvas;
     this.ctx = canvas.getContext("2d");
     this.cols = cols;
-    this.n = 8;
+    this.slots = slots;
+    this.n = slots;   // channels in use
     this.val = []; this.hold = [];
     this.last = performance.now();
     new ResizeObserver(() => this._resize()).observe(canvas);
@@ -104,7 +106,10 @@ export class GridMeter {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.w = r.width; this.h = r.height;
   }
-  setChannels(n) { this.n = Math.max(1, Math.min(16, n || 8)); }
+  setChannels(n) {
+    this.n = Math.max(0, Math.min(this.slots, n ?? this.slots));
+    for (let i = this.n; i < this.slots; i++) { this.val[i] = FLOOR; this.hold[i] = null; }
+  }
   push(db) {
     const now = performance.now();
     for (let i = 0; i < this.n; i++) {
@@ -117,18 +122,25 @@ export class GridMeter {
   _frame() {
     const now = performance.now(), dt = (now - this.last) / 1000;
     this.last = now;
-    const { ctx, w, h, n, cols } = this;
+    const { ctx, w, h, n, cols, slots } = this;
     if (!w) return;
     ctx.clearRect(0, 0, w, h);
-    const rows = Math.ceil(n / cols), gap = 14, colW = (w - gap * (cols - 1)) / cols;
+    const rows = Math.ceil(slots / cols), gap = 14, colW = (w - gap * (cols - 1)) / cols;
     const rowH = h / rows, barH = Math.max(4, rowH - 4), lab = 16;
     ctx.font = `bold ${Math.min(13, rowH - 2)}px ui-monospace, monospace`;
     ctx.textBaseline = "middle";
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < slots; i++) {
       const c = Math.floor(i / rows), r = i % rows;
       const x0 = c * (colW + gap), y = r * rowH + (rowH - barH) / 2;
       const bw = colW - lab - 2;
       const X = db => x0 + lab + bw * (db - FLOOR) / -FLOOR;
+      if (i >= n) {   // the clip has no such channel: grey, empty slot
+        ctx.fillStyle = "#4a4a4a"; ctx.textAlign = "right";
+        ctx.fillText(String(i + 1), x0 + lab - 4, y + barH / 2 + 1);
+        ctx.fillStyle = "#262626"; ctx.fillRect(X(FLOOR), y, bw, barH);
+        ctx.strokeStyle = "#333"; ctx.strokeRect(X(FLOOR) + .5, y + .5, bw - 1, barH - 1);
+        continue;
+      }
       this.val[i] = Math.max(FLOOR, (this.val[i] ?? FLOOR) - FALL_DB_PER_S * dt);
       ctx.fillStyle = css("--dim"); ctx.textAlign = "right";
       ctx.fillText(String(i + 1), x0 + lab - 4, y + barH / 2 + 1);

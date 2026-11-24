@@ -13,7 +13,7 @@ from urllib.parse import quote as urlquote
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ from .amcp import Amcp, AmcpError
 from .auth import COOKIE, MAX_AGE, Auth
 from .ext import ExtControl, ExtError
 from .config import ROOT
+from .common_tc import frames_to_tc, tc_to_frames
 from .engine import Engine
 from .fsops import Conflict, FsError, Jobs, Roots
 from .media import Media
@@ -597,55 +598,88 @@ async def session_set(request: Request):
 
 
 # ---------------------------------------------------------------- OSD overlay
-def osd_payload(p: Player) -> dict:
+def osd_view(p: Player, cfg: dict) -> tuple[dict, tuple, int | None]:
+    """Everything the OSD overlay shows, computed here; the page only puts the strings on screen.
+    Returns (view, state, frame): state changes (load, pause, seek, marks) are pushed at once."""
+    status = p.status()
     ld = p.loaded
-    d = {"status": p.status(), "pos": p.position(), "age": p.pos_age()}
-    if ld:
-        i = ld["info"]
-        d.update(name=ld["name"], file=ld["file"], kind=i["kind"], fps=i["fps"], drop=i["drop"],
-                 tc_start=i["tc_start"], fin=ld["in"], fout=ld["out"], loop=p.loop_mode == "single")
-    return d
+    if not ld:
+        return {"st": status, "name": None, "tc": None}, (status, None), None
+    i, tcc = ld["info"], cfg["timecode"]
+    fps = i.get("fps") or [30000, 1001]
+    name = ld["name"] if cfg["filename"].get("enabled", True) else None
+    tc, pos = None, p.position()
+    if tcc.get("enabled", True) and pos is not None and not (i["kind"] == "image" and tcc["mode"] == "source"):
+        if status == "playing":   # OSC position is up to a frame old; offset_frames = output delay
+            pos += p.pos_age() * fps[0] / fps[1] + cfg.get("offset_frames", 0)
+            if p.loop_mode != "single":
+                pos = min(pos, ld["out"] - 1)
+        pos = int(pos)
+        if tcc["mode"] == "remaining":
+            n = max(0, ld["out"] - pos - 1)
+        elif tcc["mode"] == "source":
+            n = tc_to_frames(i.get("tc_start"), fps) + pos
+        else:
+            n = max(0, pos - ld["in"])
+        tc = frames_to_tc(n, fps, i.get("drop", False))
+    state = (status, ld["file"], ld["in"], ld["out"], None if status == "playing" else pos)
+    return {"st": status, "name": name, "tc": tc}, state, pos
 
 
-@api.websocket("/ws/osd")
-async def ws_osd(ws: WebSocket, ch: int = 0):
-    """Light feed for the CasparCG HTML overlay: config once, then the player position every
-    osd.update_frames source frames (default 4 -> ~7.5 Hz); changes of state are sent at once."""
-    if not ws_allowed(ws):
-        await ws.close(code=4401)
-        return
-    await ws.accept()
-    try:
-        p = app_state.player(ch)
-    except HTTPException:
-        await ws.close()
-        return
-    try:
-        await ws.send_json({"type": "cfg", "osd": app_state.cfg["osd"], "name": p.name})
-        last, last_state, sent_at = None, None, 0.0
+def osd_layout(cfg: dict, name: str) -> dict:
+    tcc = cfg["timecode"]
+    return {"box": bool(cfg.get("box")), "name": name,
+            "tc": {k: tcc[k] for k in ("x", "y", "size")},
+            "label": {"elapsed": "EL", "remaining": "REM", "source": "TC"}[tcc["mode"]] if tcc.get("label") else "",
+            "fname": {k: cfg["filename"][k] for k in ("x", "y", "size")}}
+
+
+@api.get("/sse/osd")
+async def sse_osd(request: Request, ch: int = 0):
+    """Server-sent events for the CasparCG HTML overlay (osd.html):
+    `layout` once (and after /osd/reload), then `view` {st, name, tc} whenever what is on screen
+    changes -- at most every osd.update_frames source frames while playing, at once on a state change."""
+    p = app_state.player(ch)
+
+    def ev(kind: str, data: dict) -> str:
+        return f"event: {kind}\ndata: {json.dumps(data, separators=(',', ':'), ensure_ascii=False)}\n\n"
+
+    async def gen():
+        yield "retry: 1000\n\n"
+        cfg, last_view, last_state, last_pos, sent_at, chk = None, None, None, None, 0.0, 0.0
         while True:
-            d = osd_payload(p)
-            state = (d["status"], d.get("file"), d.get("fin"), d.get("fout"))
-            key = (*state, d["pos"])
-            fps = d.get("fps") or [30000, 1001]
-            every = max(1, int(app_state.cfg["osd"].get("update_frames", 4))) * fps[1] / fps[0]
             now = time.monotonic()
-            if key != last and (state != last_state or d["status"] != "playing" or now - sent_at >= every):
-                last, last_state, sent_at = key, state, now
-                await ws.send_json({"type": "pos", **d})
+            if now - chk >= 1:
+                chk = now
+                if await request.is_disconnected():
+                    return
+            if app_state.cfg["osd"] is not cfg:   # first time or after /osd/reload
+                cfg = app_state.cfg["osd"]
+                last_view = None
+                yield ev("layout", osd_layout(cfg, p.name))
+            view, state, pos = osd_view(p, cfg)
+            every = max(1, int(cfg.get("update_frames", 4)))
+            # playing: every `every` source frames (counted, not timed, so the steps are even)
+            if view != last_view and (state != last_state or pos is None or last_pos is None
+                                      or abs(pos - last_pos) >= every):
+                last_view, last_state, last_pos, sent_at = view, state, pos, now
+                yield ev("view", view)
+            elif now - sent_at >= 15:   # keep-alive so a dead connection is noticed
+                sent_at = now
+                yield ": ka\n\n"
             await asyncio.sleep(0.01)
-    except (WebSocketDisconnect, RuntimeError):
-        pass
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @api.post("/api/v1/osd/reload")
 async def osd_reload():
-    """Re-read the osd section of sendust_player.json and reload the overlay pages."""
+    """Re-read the osd section of sendust_player.json; the overlay pages get the new layout over SSE."""
     try:
         app_state.cfg["osd"] = config_mod.load()["osd"]
     except (OSError, ValueError) as e:
         raise HTTPException(400, str(e))
-    await app_state.osd.reload_overlays()
     return {"ok": True, "osd": app_state.cfg["osd"]}
 
 

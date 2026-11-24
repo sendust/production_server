@@ -17,6 +17,7 @@
     <div class="sec">
       <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
       <canvas class="g g-cpu" id="g-cpu"></canvas>
+      <div class="lg"><span><i style="background:#3987e5"></i>코어별</span><span><i style="background:#f2c94c"></i>전체 60초</span></div>
     </div>
     <div class="r"><span class="k">RAM free</span><span id="s-mem">-</span></div>
     <div class="sec">
@@ -114,10 +115,13 @@ function canvas2d(c) {
   return [g, r.width, r.height];
 }
 
-// one bar per logical core, height = load
-function drawCpu(per) {
+// one bar per logical core (height = load now) with the total CPU of the last 60 s overlaid as a line
+const CPU_LINE = "#f2c94c";
+const cpuHist = [];
+function drawCpu(per, total) {
   const c = $("#g-cpu");
   const [g, w, h] = canvas2d(c);
+  if (total != null) { cpuHist.push(total); if (cpuHist.length > 60) cpuHist.shift(); }
   if (!per?.length) return;
   const n = per.length, gap = n > 48 ? 0 : 1, bw = Math.max(1, (w - gap * (n - 1)) / n);
   per.forEach((v, i) => {
@@ -125,9 +129,20 @@ function drawCpu(per) {
     g.fillStyle = TRACK; g.fillRect(x, 0, bw, h);
     const bh = Math.max(v > 0 ? 1 : 0, h * Math.min(100, v) / 100);
     g.fillStyle = v >= 90 ? "#e66767" : BAR;
+    g.globalAlpha = .75;
     g.fillRect(x, h - bh, bw, bh);
+    g.globalAlpha = 1;
   });
-  c.title = per.map((v, i) => `core ${i}: ${v.toFixed(0)}%`).join("\n");
+  if (cpuHist.length > 1) {   // same 0-100 % scale as the bars, newest at the right edge
+    const pts = cpuHist.map((v, i) => [w - (cpuHist.length - 1 - i) * (w / 59), h - 1 - Math.min(100, v) / 100 * (h - 2)]);
+    g.lineJoin = "round";
+    for (const [col, lw] of [["#000a", 3.5], [CPU_LINE, 1.75]]) {   // dark halo keeps it readable over the bars
+      g.strokeStyle = col; g.lineWidth = lw; g.beginPath();
+      pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+      g.stroke();
+    }
+  }
+  c.title = `total ${total?.toFixed(0) ?? "-"}% (line: last 60 s)\n` + per.map((v, i) => `core ${i}: ${v.toFixed(0)}%`).join("\n");
 }
 
 function setBar(id, frac, text, title) {
@@ -190,7 +205,7 @@ connectWs(m => {
   $("#s-cpu").textContent = pct(sy.cpu_percent);
   $("#s-cpu").className = sy.cpu_percent > 85 ? "bad" : sy.cpu_percent > 65 ? "warn" : "";
   $("#s-mem").textContent = sy.mem_available != null ? fmtBytes(sy.mem_available) : "-";
-  drawCpu(sy.cpu_per);
+  drawCpu(sy.cpu_per, sy.cpu_percent);
   const g = (sy.gpus || [])[0];
   $("#s-gput").textContent = g ? (g.temp_c != null ? `${g.temp_c.toFixed(0)}°C` : "") : "none";
   $("#s-gput").className = g?.temp_c > 85 ? "bad" : g?.temp_c > 75 ? "warn" : "";

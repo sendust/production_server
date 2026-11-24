@@ -28,7 +28,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | 창 | 주소 |
 |---|---|
 | 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
-| 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2), TC/DUR/EL/REM, IN/OUT, 트랜스포트, Jog/Shuttle, 접이식 확대 타임라인, 리스트 |
+| 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC/DUR/EL/REM, IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
 | 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황 |
 | 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터) |
 | VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
@@ -58,7 +58,7 @@ UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(
 | `ext_control` | `enabled`, `key`, `osc_port`, `allow_ips`, `aux1`, `aux2` (아래) |
 | `gang.allow_origins` | gang 제어 UI 의 origin (CORS) |
 
-OSD 설정만 바꿨을 때는 재시작 없이 `curl -X POST http://<서버>:8300/api/v1/osd/reload`.
+OSD 설정만 바꿨을 때는 재시작 없이 `curl -X POST http://<서버>:8300/api/v1/osd/reload` (새 배치가 SSE 로 바로 반영된다).
 
 ## 외부 제어 (버튼 박스, MCU, Bitfocus Companion, Stream Deck …)
 
@@ -129,7 +129,7 @@ gang UI 의 origin 을 넣는다.
 |---|---|
 | `backend/amcp.py`, `osc.py`, `engine.py` | CasparCG 연결, OSC 상태 |
 | `backend/player.py`, `playlist.py` | 채널 제어, 플레이리스트 엔진(LOADBG AUTO 미리 로드, pause 라인, loop) |
-| `backend/osd.py`, `www/osd.html` | OSD 채널 (route + HTML 오버레이) |
+| `backend/osd.py`, `www/osd.html` | OSD 채널 (route + HTML 오버레이). TC·파일명 문자열은 백엔드가 계산해 SSE `/sse/osd?ch=<idx>` 로 보내고, 페이지는 표시만 한다 |
 | `backend/scenes.py`, `www/js/scenes.js` | 확대 타임라인 (scene change + audio peak) |
 | `backend/fsops.py`, `www/browser.html` | 미디어 브라우저 |
 | `wasm/mxfdec.c`, `www/vgap/` | VGA 프리뷰용 libavcodec wasm 디코더와 MXF 플레이어 |

@@ -3,7 +3,8 @@
 For every playback channel with `osd_out`, the OSD CasparCG channel carries
   layer osd_route_layer  : route://<clean channel>         (clean video + audio)
   layer osd_overlay_layer: [HTML] http://127.0.0.1:<port>/osd.html?ch=<idx>   (TC + filename)
-The overlay page gets its data from /ws/osd (see main.py).  ensure() is called periodically and
+The backend computes the TC/filename text and pushes it to the page over SSE /sse/osd (main.py);
+the page only displays it.  ensure() is called periodically and
 re-creates missing layers, e.g. after a CasparCG restart.
 """
 import logging
@@ -69,10 +70,3 @@ class Osd:
             log.info("OSD ch%d-%d <- %s", ch, layer, what)
         except AmcpError as e:
             log.warning("OSD ch%d-%d failed: %s", ch, layer, e)
-
-    async def reload_overlays(self):
-        """Force the HTML pages to reload (after an OSD config change)."""
-        for p in self.players:
-            if p.osd:
-                self._last_try.pop((p.osd, self.overlay_layer), None)
-                await self._play(p.osd, self.overlay_layer, f"[HTML] {quote(self.url(p.idx))}")
