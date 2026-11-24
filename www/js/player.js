@@ -204,6 +204,7 @@ function applyPlayer(p) {
     x?.status === "paused" && x?.loaded ? x.pos <= x.loaded.in : 0]);
   const prevKey = key(S.p);
   const prevPre = S.p?.preloaded;
+  for (const k of ["sdi_preview", "osd_state", "volume"]) if (p[k] === undefined && S.p?.[k] !== undefined) p[k] = S.p[k];
   S.p = p; S.recvAt = performance.now() - (p.age || 0) * 1000;
   if (p.volume?.length) meter.push(p.volume);
   if (key(p) !== prevKey) renderStatic();
@@ -270,42 +271,11 @@ $("#btn-open").onclick = openBrowser;
 const zw = $("#zoomwrap");
 const setZoom = open => { zw.classList.toggle("closed", !open); $(".pb").classList.toggle("zoom-open", open); $("#sc-toggle").textContent = open ? "SCENE ▴" : "SCENE ▾"; store.set("sp.zoomOpen", open ? "1" : "0"); };
 setZoom(store.get("sp.zoomOpen", "0") === "1");
-$("#sc-toggle").onclick = () => setZoom(zw.classList.contains("closed"));
-
-// ---------------------------------------------------------------- jog / shuttle
-// Jog: the knob offset steps frames (further = faster). Shuttle: the knob offset is a speed (CasparCG
-// cannot play at other rates, so it is emulated by seeking every 100 ms). Released: back to 0.
-const jog = $("#jog");
-let jogT = null, jogBase = null;
-const jogMode = () => $("input[name=jogmode]:checked").value;
-function jogTick() {
-  const v = Number(jog.value) / 100;
-  const l = loaded();
-  if (!l || !v) { $("#jog-x").textContent = "x 0"; return; }
-  if (jogBase == null) jogBase = livePos() ?? l.in;
-  let delta;
-  if (jogMode() === "jog") {
-    delta = Math.sign(v) * Math.max(1, Math.round(Math.abs(v) ** 2 * 8));   // 1..8 frames per tick
-    $("#jog-x").textContent = `${delta > 0 ? "+" : ""}${delta}f`;
-  } else {
-    const speeds = [0.25, 0.5, 1, 2, 4, 8, 16];
-    const sp = Math.sign(v) * speeds[Math.min(speeds.length - 1, Math.floor(Math.abs(v) * speeds.length))];
-    delta = Math.round(sp * fpsR() * 0.1);
-    $("#jog-x").textContent = `x ${sp}`;
-  }
-  jogBase = Math.max(l.in, Math.min(l.out - 1, jogBase + delta));
-  seekTo(jogBase);
-}
-jog.addEventListener("pointerdown", () => {
-  if (S.p?.status === "playing") cmd("pause");
-  jogBase = null;
-  clearInterval(jogT);
-  jogT = setInterval(jogTick, 100);
-});
-const jogEnd = () => { clearInterval(jogT); jogT = null; jog.value = 0; jogBase = null; $("#jog-x").textContent = "x 0"; };
-jog.addEventListener("pointerup", jogEnd);
-jog.addEventListener("pointercancel", jogEnd);
-jog.addEventListener("keydown", e => e.preventDefault());   // arrow keys belong to the transport
+$("#sc-toggle").onclick = () => {
+  const open = zw.classList.contains("closed");
+  setZoom(open);
+  if (open) scenes?.run();   // unfolding = analyse around the playhead right away
+};
 
 // ---------------------------------------------------------------- keyboard
 document.addEventListener("keydown", e => {

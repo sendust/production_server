@@ -66,14 +66,8 @@
     <button class="ubtn" data-step="1" title="+1 프레임 (→)">+1</button>
     <button class="ubtn" id="btn-end" title="OUT 직전 프레임으로 (End)"><svg viewBox="0 0 24 24"><path d="M16 5h3v14h-3zM4 5v14l11-7z"/></svg></button>
     <span class="sp"></span>
+    <button class="ubtn sm" id="sc-toggle" title="확대 타임라인 (장면전환 + 오디오 peak): 펼치면 바로 분석">SCENE ▾</button>
     <button class="ubtn" data-act="eject" title="EJECT (레이어 비우기)">EJECT</button>
-  </section>
-  <section class="jog">
-    <label class="uchk"><input type="radio" name="jogmode" value="jog" checked> Jog</label>
-    <label class="uchk"><input type="radio" name="jogmode" value="shuttle"> Shuttle</label>
-    <input type="range" id="jog" min="-100" max="100" value="0" title="Jog: 끌어서 프레임 이동 · Shuttle: 끌어서 속도 (놓으면 정지)">
-    <span class="x mono" id="jog-x">x 0</span>
-    <button class="ubtn sm" id="sc-toggle" title="확대 타임라인 (장면전환 + 오디오 peak) 열기/닫기">SCENE ▾</button>
   </section>
 
   <!-- zoomed timeline (collapsible) -->

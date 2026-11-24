@@ -36,13 +36,7 @@ export class PlaylistUI {
     for (const id of [...this.sel]) if (!ids.has(id)) this.sel.delete(id);
     $("#pl-enable").checked = pl.enabled;
     const slotSel = $("#pl-slot");
-    slotSel.innerHTML = SLOTS.map(s => {
-      const saved = pl.slots?.[s];
-      const shared = /[A-D]/.test(s);
-      const when = saved ? new Date(saved.mtime * 1000).toLocaleString("ko-KR", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "empty";
-      const nm = saved?.name ? ` ${saved.name}` : "";
-      return `<option value="${s}">${shared ? "공유 " : ""}${s}${nm} · ${when}</option>`;
-    }).join("");
+    slotSel.innerHTML = SLOTS.map(s => `<option value="${s}">LIST ${s}</option>`).join("");
     slotSel.value = pl.slot;
     const nameEl = $("#pl-name");
     if (nameEl) nameEl.textContent = pl.name || "";
@@ -171,6 +165,14 @@ export class PlaylistUI {
     this.render();
   }
 
+  // double click: CUE at once, except while the channel is playing (an accidental double click must not
+  // replace the clip on air; use the CUE button then)
+  dblCue(id) {
+    if (this.getPlayer()?.status === "playing") return toast("재생 중에는 더블클릭 CUE 를 하지 않습니다 — CUE 버튼을 쓰세요", 2500);
+    this.sel = new Set([id]);
+    this.cueSelected(false);
+  }
+
   async cueSelected(play = false) {
     const ids = this.selectedIds();
     const it = this.pl.items.find(i => i.id === ids[0]);
@@ -206,10 +208,15 @@ export class PlaylistUI {
 
   _bind() {
     const tb = this.tbody, list = this.list;
-    tb.addEventListener("click", e => { const tr = e.target.closest("tr"); if (tr) this._click(tr.dataset.id, e); list.focus(); });
-    tb.addEventListener("dblclick", e => {
+    let last = { id: null, t: 0 };
+    tb.addEventListener("click", e => {
       const tr = e.target.closest("tr"); if (!tr) return;
-      this.sel = new Set([tr.dataset.id]); this.cueSelected(false);
+      const id = tr.dataset.id, now = performance.now();
+      const dbl = !e.shiftKey && !e.ctrlKey && last.id === id && now - last.t < 450;
+      last = dbl ? { id: null, t: 0 } : { id, t: now };
+      this._click(id, e);
+      list.focus();
+      if (dbl) this.dblCue(id);
     });
     tb.addEventListener("dragstart", e => {
       const tr = e.target.closest("tr"); if (!tr) return;

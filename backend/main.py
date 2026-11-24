@@ -176,6 +176,12 @@ class App:
                     asyncio.create_task(p.on_tick())
                 await self.hub.broadcast(self.tick_msg())
 
+    def full_snapshot(self, p: Player) -> dict:
+        s = p.snapshot()
+        s["osd_state"] = self.osd.state(p)
+        s["sdi_preview"] = self.sdi.state(p)
+        return s
+
     def tick_msg(self) -> dict:
         peaks = self.engine.take_peaks()
         players = []
@@ -435,7 +441,7 @@ async def ch_action(idx: int, action: str, body: ChCmd | None = None):
     except (ValueError, OSError, RuntimeError) as e:
         p.logmsg(f"{action} failed: {e}", "error")
         raise HTTPException(400, str(e))
-    return {"ok": True, "player": p.snapshot()}
+    return {"ok": True, "player": app_state.full_snapshot(p)}
 
 
 @api.post("/api/v1/ch/{idx}/playlist/{op}")
