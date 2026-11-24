@@ -180,8 +180,9 @@ function renderPlRem(clipRemSec) {
 
 function renderTcMode() {
   const el = tcMode() === "elapsed";
-  $("#tc-lbl").textContent = el ? "EL" : "TC";
+  $("#tc-lbl").textContent = "TC";   // white = MXF timecode, red = elapsed from IN
   $("#tc-lbl").classList.toggle("el", el);
+  $("#tc-lbl").title = $("#tc").title = el ? "경과 시간 (IN = 0) — 클릭: MXF 타임코드로" : "MXF 타임코드 — 클릭: 경과 시간(IN = 0)으로";
 }
 async function toggleTcMode() {
   const mode = tcMode() === "source" ? "elapsed" : "source";

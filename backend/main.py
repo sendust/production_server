@@ -6,7 +6,10 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import os
 import shutil
+
+import psutil
 import socket
 from urllib.parse import quote as urlquote
 
@@ -135,14 +138,47 @@ class App:
         self._ticker = asyncio.create_task(self._tick())
         self._osd_task = asyncio.create_task(self._osd_loop())
 
+    def caspar_age(self) -> float | None:
+        """Seconds since the CasparCG server process started (None when not running). The pid is
+        cached; /proc is rescanned at most every 5 s while it is missing. CEF helper processes share
+        the name, so the main one is the one without --type= on its command line."""
+        return time.time() - self._caspar_started if getattr(self, "_caspar_pid", None) else None
+
+    def _caspar_refresh(self):
+        pid = getattr(self, "_caspar_pid", None)
+        if pid and os.path.exists(f"/proc/{pid}"):
+            return
+        self._caspar_pid = None
+        now = time.monotonic()
+        if now - getattr(self, "_caspar_scan", 0) < 5:
+            return
+        self._caspar_scan = now
+        for d in os.listdir("/proc"):
+            if not d.isdigit():
+                continue
+            try:
+                with open(f"/proc/{d}/comm") as f:
+                    if not f.read().startswith("casparcg-server"):
+                        continue
+                with open(f"/proc/{d}/cmdline", "rb") as f:
+                    if b"--type=" in f.read():
+                        continue
+                self._caspar_started = psutil.Process(int(d)).create_time()
+                self._caspar_pid = int(d)
+                return
+            except (OSError, psutil.Error):
+                continue
+
     def sys_msg(self) -> dict:
         snap = self.engine.snapshot()
+        self._caspar_refresh()
         try:
             du = shutil.disk_usage(self.roots.base("media"))
             disk = {"total": du.total, "free": du.free}
         except OSError:
             disk = None
         return {"type": "sys", "sys": self.sysinfo.snapshot, "amcp": self.amcp.connected, "media_disk": disk,
+                "caspar_age": self.caspar_age(),
                 "players": [{"idx": p.idx, "name": p.name, "status": p.status(),
                              "clip": p.loaded["name"] if p.loaded else None} for p in self.players],
                 "osc": snap["osc_alive"], "caspar_channels": {n: {"format": c["format"], "alive": c["alive"]}
@@ -625,34 +661,34 @@ def osd_view(p: Player, cfg: dict) -> tuple[dict, tuple, int | None]:
     Returns (view, state, frame): state changes (load, pause, seek, marks) are pushed at once."""
     status = p.status()
     ld = p.loaded
+    # TC kind follows the playback window (channels[].tc_mode): source = MXF TC, elapsed = IN is 0
+    mode = next((c.get("tc_mode") for c in app_state.cfg["channels"] if c["channel_index"] == p.idx), None) or "source"
     if not ld:
-        return {"st": status, "name": None, "tc": None}, (status, None), None
+        return {"st": status, "name": None, "tc": None, "mode": mode}, (status, None, mode), None
     i, tcc = ld["info"], cfg["timecode"]
     fps = i.get("fps") or [30000, 1001]
     name = ld["name"] if cfg["filename"].get("enabled", True) else None
     tc, pos = None, p.position()
-    if tcc.get("enabled", True) and pos is not None and not (i["kind"] == "image" and tcc["mode"] == "source"):
+    if tcc.get("enabled", True) and pos is not None and not (i["kind"] == "image" and mode == "source"):
         if status == "playing":   # OSC position is up to a frame old; offset_frames = output delay
             pos += p.pos_age() * fps[0] / fps[1] + cfg.get("offset_frames", 0)
             if p.loop_mode != "single":
                 pos = min(pos, ld["out"] - 1)
         pos = int(pos)
-        if tcc["mode"] == "remaining":
-            n = max(0, ld["out"] - pos - 1)
-        elif tcc["mode"] == "source":
+        if mode == "source":
             n = tc_to_frames(i.get("tc_start"), fps) + pos
         else:
             n = max(0, pos - ld["in"])
         tc = frames_to_tc(n, fps, i.get("drop", False))
-    state = (status, ld["file"], ld["in"], ld["out"], None if status == "playing" else pos)
-    return {"st": status, "name": name, "tc": tc}, state, pos
+    state = (status, ld["file"], ld["in"], ld["out"], None if status == "playing" else pos, mode)
+    return {"st": status, "name": name, "tc": tc, "mode": mode}, state, pos
 
 
 def osd_layout(cfg: dict, name: str) -> dict:
     tcc = cfg["timecode"]
     return {"box": bool(cfg.get("box")), "name": name,
             "tc": {k: tcc[k] for k in ("x", "y", "size")},
-            "label": {"elapsed": "EL", "remaining": "REM", "source": "TC"}[tcc["mode"]] if tcc.get("label") else "",
+            "label": "TC" if tcc.get("label") else "",   # white = MXF TC, red = elapsed (view.mode)
             "fname": {k: cfg["filename"][k] for k in ("x", "y", "size")}}
 
 

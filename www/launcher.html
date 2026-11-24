@@ -13,6 +13,7 @@
 
   <div class="sysbox" id="sys">
     <div class="r"><span class="k">CasparCG</span><span id="s-amcp" class="bad">●</span></div>
+    <div class="r" title="CasparCG 서버 프로세스가 시작된 뒤 지난 시간 (재시작/크래시 확인용)"><span class="k">Age</span><span id="s-cage">-</span></div>
     <div class="r"><span class="k">OSC</span><span id="s-osc" class="bad">●</span></div>
     <div class="sec">
       <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
@@ -99,6 +100,12 @@ function renderChannels() {
   $$("#chs [data-idx]").forEach(b => b.onclick = () => openPlay(Number(b.dataset.idx), Number(b.dataset.i)));
 }
 
+const age = s => {   // CasparCG process age: 45s / 12m 05s / 3h 07m / 2d 04h
+  if (s == null) return "not running";
+  s = Math.floor(s);
+  const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, p = x => String(x).padStart(2, "0");
+  return d ? `${d}d ${p(h)}h` : h ? `${h}h ${p(m)}m` : m ? `${m}m ${p(s % 60)}s` : `${s}s`;
+};
 const pct = v => v == null ? "-" : `${v.toFixed(0)}%`;
 const RX = "#3987e5", TX = "#d95926", BAR = "#3987e5", TRACK = "#2a2d31";   // dark-validated pair (dataviz)
 const bps = v => v == null ? "-" : v >= 1e9 ? `${(v / 1e9).toFixed(2)}G` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${(v / 1e3).toFixed(0)}k`;
@@ -198,6 +205,8 @@ connectWs(m => {
   const s = m.type === "hello" ? m.sys : m.type === "sys" ? m : null;
   if (!s) return;
   const sy = s.sys || {};
+  $("#s-cage").textContent = age(s.caspar_age);
+  $("#s-cage").className = s.caspar_age == null ? "bad" : "";
   $("#s-amcp").className = s.amcp ? "ok" : "bad";
   $("#s-amcp").textContent = s.amcp ? "● ON" : "● OFF";
   $("#s-osc").className = s.osc ? "ok" : "bad";

@@ -62,7 +62,7 @@ body { background: var(--bg); }
 .tcs .rem.warn { color: var(--warn); }
 .tcs .rem.alert { color: var(--bad); animation: blink 1s steps(1) infinite; }
 .tcs .tcsel { cursor: pointer; user-select: none; }
-.tcs #tc-lbl.el { color: var(--cyan); }
+.tcs #tc-lbl.el { color: #ff3b3b; }
 .tcs .plrem { color: var(--cyan); }
 .tcs .plrem.off { visibility: hidden; }
 
