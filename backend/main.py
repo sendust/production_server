@@ -177,7 +177,7 @@ class App:
             disk = {"total": du.total, "free": du.free}
         except OSError:
             disk = None
-        return {"type": "sys", "sys": self.sysinfo.snapshot, "amcp": self.amcp.connected, "media_disk": disk,
+        return {"type": "sys", "sys": self.sysinfo.snapshot, "amcp": self.amcp.responsive, "media_disk": disk,
                 "caspar_age": self.caspar_age(),
                 "players": [{"idx": p.idx, "name": p.name, "status": p.status(),
                              "clip": p.loaded["name"] if p.loaded else None} for p in self.players],
@@ -228,7 +228,7 @@ class App:
             s["osd_state"] = self.osd.state(p)
             s["sdi_preview"] = self.sdi.state(p)
             players.append(s)
-        return {"type": "tick", "engine": self.engine.snapshot(), "amcp": self.amcp.connected, "players": players}
+        return {"type": "tick", "engine": self.engine.snapshot(), "amcp": self.amcp.responsive, "players": players}
 
 
 app_state = App()
@@ -331,7 +331,7 @@ async def status_all():
             "fps": ld["info"]["fps"] if ld else None, "loop_mode": p.loop_mode, "playlist_play": p.pl.enabled,
             "current_id": p.pl.current_id, "items": sum(1 for i in p.pl.items if i["type"] == "clip"),
         })
-    return {"host": socket.gethostname(), "amcp": app_state.amcp.connected,
+    return {"host": socket.gethostname(), "amcp": app_state.amcp.responsive,
             "osc": app_state.engine.snapshot()["osc_alive"], "channels": out}
 
 
@@ -346,7 +346,7 @@ async def get_info():
 
 @api.get("/api/v1/engine")
 async def get_engine():
-    return {"engine": app_state.engine.snapshot(), "amcp": app_state.amcp.connected}
+    return {"engine": app_state.engine.snapshot(), "amcp": app_state.amcp.responsive}
 
 
 class RawCmd(BaseModel):

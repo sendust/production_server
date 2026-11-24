@@ -86,7 +86,7 @@ class SdiPreview:
 
     async def ensure(self):
         """Re-add wanted consumers that disappeared (CasparCG restart, consumer error)."""
-        if not self.amcp.connected:
+        if not self.amcp.responsive:
             return
         for p in self.players:
             src = self.want.get(p.idx)

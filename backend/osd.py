@@ -45,7 +45,7 @@ class Osd:
         }
 
     async def ensure(self):
-        if not self.enabled or not self.amcp.connected:
+        if not self.enabled or not self.amcp.responsive:
             return
         for p in self.players:
             if not p.osd:

@@ -206,8 +206,10 @@ connectWs(m => {
   const sy = s.sys || {};
   $("#s-cage").textContent = age(s.caspar_age);
   $("#s-cage").className = s.caspar_age == null ? "bad" : "";
+  // ON = answering AMCP; NO RESP = process still there but not answering (hung, or crashed and
+  // writing its core dump); OFF = no process
   $("#s-amcp").className = s.amcp ? "ok" : "bad";
-  $("#s-amcp").textContent = s.amcp ? "● ON" : "● OFF";
+  $("#s-amcp").textContent = s.amcp ? "● ON" : s.caspar_age != null ? "● NO RESP" : "● OFF";
   $("#s-osc").className = s.osc ? "ok" : "bad";
   $("#s-osc").textContent = s.osc ? "● ON" : "● OFF";
   $("#s-cpu").textContent = pct(sy.cpu_percent);

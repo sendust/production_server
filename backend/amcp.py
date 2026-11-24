@@ -5,9 +5,11 @@ so keeping this connection open is what feeds the OSC receiver.
 """
 import asyncio
 import logging
+import time
 
 log = logging.getLogger("amcp")
 IO_TIMEOUT = 8.0   # whole command/response exchange
+RESPONSIVE_SEC = 6.0   # keepalive PINGs every 2 s: no answer for this long = not responsive
 
 
 class AmcpError(Exception):
@@ -28,7 +30,14 @@ class Amcp:
         self._reader = self._writer = None
         self._lock = asyncio.Lock()
         self.connected = False
+        self.last_ok = 0.0   # monotonic time of the last answered command
         self._task = None
+
+    @property
+    def responsive(self) -> bool:
+        """Connected AND answering. A crashed CasparCG that is still writing its core dump keeps
+        port 5250 open (TCP connects fine) but never answers -- that must not count as ON."""
+        return self.connected and time.monotonic() - self.last_ok < RESPONSIVE_SEC
 
     def start(self):
         self._task = asyncio.create_task(self._keepalive())
@@ -86,6 +95,7 @@ class Amcp:
                 # one deadline for the whole exchange: a peer that stops reading (CasparCG hung or
                 # writing a core dump) must not hold the lock -- and so every command -- forever
                 head, data = await asyncio.wait_for(self._exchange(cmd), IO_TIMEOUT)
+                self.last_ok = time.monotonic()
             except (OSError, asyncio.TimeoutError, ConnectionError) as e:
                 await self._close()
                 raise AmcpError(0, f"io error: {e!r}")
