@@ -1,5 +1,7 @@
 # sendust playlist
 
+한국어 | [English](README.en.md)
+
 CasparCG 2.5 로 MXF(XDCAM HD422 50 Mb/s 위주)·이미지·오디오 클립을 재생하는 웹 플레이아웃.
 headless Ubuntu 서버에서 백엔드(FastAPI)와 CasparCG 가 돌고, 운용은 웹 브라우저에서 한다.
 재생 채널 하나당 재생 제어창 하나, 미디어 브라우저 창은 공유.
@@ -24,6 +26,7 @@ headless Ubuntu 서버에서 백엔드(FastAPI)와 CasparCG 가 돌고, 운용�
 필요: ffmpeg/ffprobe, CasparCG 2.5, mediamtx(SDI 프리뷰), `libnvidia-gl-580`(CasparCG GPU 합성).
 
 UI 는 부조정실 HD 모니터(1920×1080)에 맞춘 큰 버튼/글자 배치(uMP 스타일)다.
+재생 창과 미디어 브라우저는 오른쪽 위 버튼으로 테마(dark / white / gray / pink / brown)를 바꾼다. 재생 채널마다, 미디어 브라우저 따로 기억한다.
 
 주소창 없이 쓰기: 런처를 **앱 창**으로 띄운다. 런처가 여는 창(재생, 미디어 브라우저, 로그, 프리뷰)은 모두 팝업이라
 런처가 앱 창이면 함께 주소창 없이 열린다. (웹 페이지 스스로는 주소창을 숨길 수 없다.)
@@ -37,8 +40,8 @@ chrome.exe --app=http://<서버>:8300/launcher.html          # Windows 바로가
 |---|---|
 | 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
 | 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC(클릭: MXF TC ↔ 경과)/DUR/REM(+ Playlist play 시 n/N 과 리스트 전체 남은 시간), IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
-| 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황 |
-| 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터) |
+| 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황. 판넬 높이·열 너비 조절. 제목줄 "+ PLAY n" = 선택한 media 클립을 그 채널 리스트에 추가, "↗" = 재생 창 열기 |
+| 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터), 상단에 접속 클라이언트(IP 와 열린 창) |
 | VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
 | SDI 프리뷰 (단독) | `/sdi.html?ch=<idx>` |
 
@@ -100,7 +103,7 @@ item=2/5
 
 ```cpp
 HTTPClient http;
-http.begin("http://10.10.108.103:8300/ext/v1/1/play?key=SECRET");
+http.begin("http://<서버>:8300/ext/v1/1/play?key=SECRET");
 int code = http.GET();          // 200 이면 성공
 ```
 
@@ -124,13 +127,21 @@ gang UI 의 origin 을 넣는다.
 | GET | `/api/v1/status` | 모든 채널 요약 (상태, 클립, 위치, in/out, 플레이리스트) |
 | GET | `/api/v1/ch/{idx}` | 채널 상세 + 플레이리스트 + 최근 로그 |
 | POST | `/api/v1/ch/{idx}/{action}` | `load{file,fin,fout}` `cue{id,on}` `play` `pause` `toggle` `seek{frame}` `step{delta}` `top` `next` `prev` `mark_in` `mark_out` `marks{fin,fout}` `clear_marks` `loop{mode}` `eject` |
+| POST | `/api/v1/ch/{idx}/tc_mode` | `{mode: source|elapsed}` (설정 파일에 저장) |
 | POST | `/api/v1/ch/{idx}/playlist/{op}` | `add{files,at}` `pause{at}` `move{ids,at}` `delete{ids}` `clear` `enable{on}` `marks{id,fin,fout}` `slot{slot}` `save{slot}` `load{slot}` `cue{id,on}` |
 | POST | `/api/v1/ch/{idx}/sdi_preview` | `{on, source: clean|osd}` |
 | GET | `/api/v1/media/list`, `/media/probe`, POST `/media/scenes` | 미디어 목록, ffprobe 정보, 장면 전환/오디오 peak |
 | GET | `/api/v1/fs/list` · POST `fs/mkdir|rename|copy|move|delete` · PUT `fs/upload` | 파일 브라우저 |
-| WS | `/ws` | `hello`(전체 상태) 후 `tick`(20 Hz), `playlist`, `log`, `job`, `fs` 이벤트 |
+| WS | `/ws?page=<page>&ch=<idx>` | `hello`(전체 상태) 후 `tick`(20 Hz), `playlist`, `log`, `job`, `fs`, `sys`, `clients`, `tc_mode` 이벤트 |
 
 프레임 단위: API 는 원본(소스) 프레임 번호. `out` 은 EDL 처럼 재생되지 않는 첫 프레임(길이 = out − in).
+
+## CasparCG 가 멈추거나 재시작될 때
+
+- CasparCG 의 OSC 가 2초 동안 없으면 채널 상태는 `offline` (UI 에 OFFLINE 깜빡임). 올라가 있던 클립 정보는 유지.
+- CasparCG 프로세스가 사라지면 모든 채널을 비운다(EJECT). 로그 `CasparCG stopped: channel cleared`.
+- 새 CasparCG 가 응답하면 켜져 있던 OSD 레이어와 SDI 프리뷰 consumer 를 자동으로 다시 붙인다.
+- 런처의 CasparCG 표시: ON = AMCP 응답, NO RESP = 프로세스는 있으나 무응답, OFF = 프로세스 없음.
 
 ## 구조
 
@@ -145,7 +156,8 @@ gang UI 의 origin 을 넣는다.
 | `backend/sdi_preview.py`, `www/sdi.html` | SDI 프리뷰 (WebRTC) |
 | `backend/ext.py`, `backend/auth.py` | 외부 제어, 인증 |
 | `backend/sysinfo.py`, `backend/loghub.py` | 시스템 정보(mediarouter 와 동일), 로그 뷰어용 로그 버퍼 |
-| `www/launcher.html`, `www/log.html`, `www/css/ump.css` | 런처, 로그 뷰어, 부조정실용 스타일 |
+| `www/launcher.html`, `www/log.html`, `www/css/ump.css`, `www/css/theme.css` | 런처, 로그 뷰어, 부조정실용 스타일, 색 테마 |
+| `config_samples/` | 설정 샘플 |
 
 ## 알아 둘 CasparCG 2.5 특성 (실측)
 
@@ -154,4 +166,7 @@ gang UI 의 origin 을 넣는다.
 - 이미지 producer 는 재생 위치를 보내지 않는다 → 백엔드가 이미지 재생 시간을 직접 잰다.
 - OSC `mixer/audio/volume` = 채널별 int32 peak, dBFS = 20·log10(v/2³¹).
 - ffmpeg consumer: 옵션은 `-format`, `-codec:v`, `-filter:v` 형식. `-an` 미지원(다음 토큰을 값으로 먹음) → 오디오는 mono Opus 로 최소화.
-  필터 `format=bgra` 는 CasparCG 를 죽였다(SIGILL). 켜 두면 CasparCG CPU 가 약 3~4코어 늘어난다.
+  프리뷰를 켜 두면 CasparCG CPU 가 약 3~4코어 늘어난다.
+- NVIDIA GL 라이브러리가 설치돼 있으면 `LIBGL_ALWAYS_SOFTWARE=1` 만으로는 소프트웨어 GL 이 되지 않는다(libglvnd 가 NVIDIA 를 고름).
+  `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json` 로 Mesa 를 지정한다.
+- CasparCG 를 끈 직후 바로 다시 띄우면 DeckLink 출력을 열지 못할 수 있다("Could not enable primary video output"). 8초쯤 기다린다.
