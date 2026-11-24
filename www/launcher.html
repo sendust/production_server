@@ -65,9 +65,14 @@ function open(name, url, r) {
   return w;
 }
 // rectangles: PLAY windows share the screen right of the launcher; browser / log open over them
+// Playback windows side by side right of the launcher. The UI is laid out for two windows across
+// a 1920 screen, so with more than two channels every window keeps the two-across size: window i
+// goes to column i % 2, and later rows are stacked 30 px down/right so each title bar stays visible.
 function playRect(i) {
-  const s = scr(), n = Math.max(1, info?.channels.length ?? 1), W = Math.floor((s.w - LW) / n);
-  return { x: s.x + LW + i * W, y: s.y, w: W, h: s.h };
+  const s = scr(), n = Math.max(1, info?.channels.length ?? 1), cols = Math.min(2, n);
+  const W = Math.floor((s.w - LW) / cols), col = i % cols, layer = Math.floor(i / cols);
+  const layers = Math.ceil(n / cols), off = 30 * layer, shrink = 30 * (layers - 1);
+  return { x: s.x + LW + col * W + off, y: s.y + off, w: W - shrink, h: s.h - shrink };
 }
 const openPlay = (idx, i) => open(`sendust_player_${idx}`, `/player.html?ch=${idx}`, playRect(i));
 const openBrowser = () => { const s = scr(); return open("sendust_browser", "/browser.html", { x: s.x + LW, y: s.y, w: Math.min(1400, s.w - LW), h: Math.round(s.h * 0.9) }); };
