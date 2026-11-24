@@ -1,0 +1,62 @@
+/* Colour themes of the playback window and the media browser (button at the top right, theme.js).
+   Each theme only overrides the colour variables of app.css / ump.css; the level meter, timeline and
+   scene strip keep their dark instrument look in every theme. --swatch / --swatch-fg colour the
+   theme button itself. */
+:root { --swatch: #262626; --swatch-fg: #f2f2f2; --pause-a: #2a2412; --pause-b: #241f10; }
+
+html[data-theme="gray"] {
+  --bg: #4a4d52; --panel: #3e4146; --panel2: #55595f; --line: #676b71; --fg: #f6f6f6; --dim: #c3c7cc;
+  --btn-top: #7c8188; --btn-bot: #5b5f65; --btn-edge: #2a2c2f;
+  --title: #34373b; --deep: #393c40; --bar: #45494e; --list: #4c4f54; --thead: #3b3e42; --raised: #515459;
+  --input: #5d6168; --split: #5f6368; --grip: #a3a7ad; --screen: #2c2e31; --muted: #8b8f95;
+  --pane-active: #4d5a68; --tree: #414448; --tree-hover: #585d64; --tree-cur: #3f6489; --files: #46494e;
+  --row-line: #585c61; --row-hover: #575c63; --row-sel: #3f6489;
+  --pl-cur: #2f5a3a; --pl-cur-fg: #b9ffc6; --pl-cursel: #3f6e52; --pause-a: #5a5232; --pause-b: #4f482c;
+  --swatch: #7c8188; --swatch-fg: #ffffff;
+}
+
+html[data-theme="brown"] {
+  --bg: #2e241d; --panel: #251d17; --panel2: #3a2e25; --line: #4f3f33; --fg: #f4eadf; --dim: #bca896;
+  --btn-top: #6d5747; --btn-bot: #4b3b30; --btn-edge: #1a130f;
+  --title: #1c1510; --deep: #221a14; --bar: #2c2219; --list: #32281f; --thead: #271e17; --raised: #3a2e25;
+  --input: #3e3229; --split: #4f3f33; --grip: #a48a74; --screen: #140f0b; --muted: #7c6858;
+  --pane-active: #43352a; --tree: #271e17; --tree-hover: #3d3027; --tree-cur: #5c4532; --files: #2d241c;
+  --row-line: #3e3229; --row-hover: #41342a; --row-sel: #5c4532;
+  --pl-cur: #2f4a25; --pl-cur-fg: #bdf2a6; --pl-cursel: #3f5e31; --pause-a: #3d2f17; --pause-b: #352914;
+  --swatch: #7b5a43; --swatch-fg: #f8eee4;
+}
+
+/* light themes: darker accents so coloured text stays readable on light surfaces */
+html[data-theme="white"], html[data-theme="pink"] {
+  color-scheme: light;
+  --cyan: #00808c; --accent: #00808c; --ok: #1f8f33; --warn: #b06a00; --bad: #d42d2d; --outc: #c25a00;
+  --in: #00808c; --out: #c25a00; --folder: #a87400;
+}
+html[data-theme="white"] {
+  --bg: #eef0f3; --panel: #ffffff; --panel2: #e8ebef; --line: #c8cdd3; --fg: #1c2126; --dim: #5d6670;
+  --btn-top: #ffffff; --btn-bot: #dce0e5; --btn-edge: #a6adb5;
+  --title: #e1e5ea; --deep: #e9ecf0; --bar: #e4e7eb; --list: #ffffff; --thead: #e8ebef; --raised: #eef0f3;
+  --input: #ffffff; --split: #cfd4da; --grip: #7d858e; --screen: #ffffff; --muted: #a3aab2;
+  --pane-active: #d8e6f5; --tree: #f6f7f9; --tree-hover: #e8eff7; --tree-cur: #cbe0f8; --files: #ffffff;
+  --row-line: #e3e6ea; --row-hover: #eef3f8; --row-sel: #cbe0f8;
+  --pl-cur: #d6f4dc; --pl-cur-fg: #0f6b25; --pl-cursel: #b7e7c2; --pause-a: #fbefc9; --pause-b: #f6e7b8;
+  --swatch: #ffffff; --swatch-fg: #1c2126;
+}
+html[data-theme="pink"] {
+  --bg: #f8e3eb; --panel: #fff3f7; --panel2: #f3d4e0; --line: #e0b0c3; --fg: #3a1e2a; --dim: #8b5d70;
+  --btn-top: #ffeef4; --btn-bot: #f1c5d6; --btn-edge: #c78ba3;
+  --title: #efc5d5; --deep: #fbe9f0; --bar: #f4d7e3; --list: #fff7fa; --thead: #f6dce6; --raised: #f8e2eb;
+  --input: #ffffff; --split: #e8bacc; --grip: #a5667f; --screen: #fff7fa; --muted: #b98ea0;
+  --pane-active: #f5cddc; --tree: #fdf0f5; --tree-hover: #fae0ea; --tree-cur: #f2bcd0; --files: #fff7fa;
+  --row-line: #f1d5e0; --row-hover: #fbe6ee; --row-sel: #f4c2d6;
+  --pl-cur: #dcf3e0; --pl-cur-fg: #17692a; --pl-cursel: #c4e7cb; --pause-a: #fbecc9; --pause-b: #f5e2b6;
+  --swatch: #f48fb1; --swatch-fg: #3a1e2a;
+}
+
+/* light themes: the uMP title bars use white text on dark, keep the button shadow soft */
+html[data-theme="white"] .ubtn, html[data-theme="pink"] .ubtn { box-shadow: inset 0 1px 0 #ffffff88, 0 1px 2px #0003; }
+
+.themebtn { height: 28px; min-width: 64px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--swatch); color: var(--swatch-fg); font: 800 12px/1 var(--mono); letter-spacing: 1px; cursor: pointer;
+  text-transform: uppercase; box-shadow: 0 0 0 2px var(--title) inset; }
+.themebtn:hover { filter: brightness(1.08); }

@@ -1,5 +1,6 @@
 // Playback window (uMP-style layout, sized for HD): one page per playback channel (?ch=<channel_index>).
 import { $, $$, api, connectWs, framesToTc, durTc, tcToFrames, esc, toast, addLogout } from "./common.js";
+import { initTheme } from "./theme.js";
 import { PlaylistUI, secTc } from "./playlist_ui.js";
 import { Scenes } from "./scenes.js";
 import { Timeline } from "./timeline.js";
@@ -364,3 +365,5 @@ document.addEventListener("keydown", e => {
 
 renderStatic();
 requestAnimationFrame(renderLive);
+
+initTheme(document.getElementById("btn-theme"));

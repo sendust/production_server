@@ -6,6 +6,8 @@
 <title>sendust playlist</title>
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/ump.css">
+<link rel="stylesheet" href="css/theme.css">
+<script>try { const t = localStorage.getItem("sp.theme"); if (t && t !== "dark") document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <div class="pb">
@@ -17,6 +19,7 @@
     <label class="uchk" title="송출 채널을 저지연(WebRTC)으로 보기 — CasparCG ffmpeg consumer 를 추가합니다 (CPU 약 3~4코어)">
       <input type="checkbox" id="pv-enable"> Preview</label>
     <button class="ubtn sm" id="btn-browser" title="미디어 브라우저">Media</button>
+    <button class="themebtn" id="btn-theme">dark</button>
     <span class="dots"><span><i class="dot" id="d-ws"></i>WS</span><span><i class="dot" id="d-amcp"></i>AMCP</span><span><i class="dot" id="d-osc"></i>OSC</span></span>
   </header>
 

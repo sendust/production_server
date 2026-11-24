@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/ump.css">
 <link rel="stylesheet" href="css/browser.css">
+<link rel="stylesheet" href="css/theme.css">
+<script>try { const t = localStorage.getItem("sp.theme"); if (t && t !== "dark") document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <div class="ub">
@@ -14,6 +16,7 @@
     <span class="t">Media Browser</span>
     <span class="route" id="players"></span>
     <span class="sp"></span>
+    <button class="themebtn" id="btn-theme">dark</button>
     <span class="dots"><span><i class="dot" id="d-ws"></i>WS</span><span><i class="dot" id="d-amcp"></i>AMCP</span></span>
   </header>
 

@@ -1,6 +1,7 @@
 // Media browser (uBrowser-like): upper pane = CasparCG media path, lower pane = one favourite path,
 // each with a folder tree and a file list; "전송하기" copies the lower selection into the upper folder.
 import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout } from "./common.js";
+import { initTheme } from "./theme.js";
 
 const S = { info: null, favorites: [], jobs: new Map(), session: {}, active: null };
 const probeCache = new Map();   // media rel path -> probe | "pending" | "error"
@@ -488,3 +489,5 @@ connectWs(async m => {
     bar.addEventListener("dblclick", () => { apply(null); try { localStorage.removeItem(KEY); } catch { /* */ } });
   }
 }
+
+initTheme(document.getElementById("btn-theme"));
