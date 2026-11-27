@@ -32,11 +32,12 @@ from .fsops import Conflict, FsError, Jobs, Roots
 from .media import Media
 from .osd import Osd
 from . import scenes as scenes_mod
+from . import settings as settings_mod
 from .player import Player
 from .sdi_preview import SdiPreview
 from .sysinfo import SysInfo
 from .loghub import LogHub
-from .version import commit_stamp
+from .version import commit_hash, commit_stamp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("main")
@@ -108,6 +109,7 @@ class App:
     def __init__(self):
         self.cfg = config_mod.load()
         self.stamp = commit_stamp()
+        self.commit = commit_hash()   # version of the code this backend process runs
         self.engine = Engine()
         self.hub = Hub()
         self.loghub = LogHub(self.hub.broadcast)
@@ -123,6 +125,7 @@ class App:
                         for ch in self.cfg["channels"]]
         self.osd = Osd(self.cfg, self.amcp, self.engine, self.players, self.cfg["http"]["port"])
         self.sdi = SdiPreview(self.cfg, self.amcp, self.engine, self.players)
+        self.service = settings_mod.CasparService(self.cfg["casparcg"]["service"], lambda: self.caspar_pid())
         self.auth = Auth(self.cfg)
         self.ext = ExtControl(self)
         self.favorites = JsonStore(DATA / "favorites.json", list(self.cfg["browser"].get("favorites", [])))
@@ -141,7 +144,7 @@ class App:
     def info(self) -> dict:
         return {
             "api_version": 1, "host": socket.gethostname(), "auth": self.auth.enabled,
-            "title": self.cfg["title"], "stamp": self.stamp,
+            "title": self.cfg["title"], "stamp": self.stamp, "commit": self.commit,
             "channels": self.cfg["channels"], "osd": self.cfg["osd"],
             "zoom_timeline": self.cfg["zoom_timeline"],
             "media_path": str(self.roots.base("media")), "host_root": str(self.roots.base("host")),
@@ -163,6 +166,10 @@ class App:
         cached; /proc is rescanned at most every 5 s while it is missing. CEF helper processes share
         the name, so the main one is the one without --type= on its command line."""
         return time.time() - self._caspar_started if getattr(self, "_caspar_pid", None) else None
+
+    def caspar_pid(self) -> int | None:
+        self._caspar_refresh()
+        return getattr(self, "_caspar_pid", None)
 
     def _caspar_refresh(self):
         pid = getattr(self, "_caspar_pid", None)
@@ -765,6 +772,55 @@ async def sse_osd(request: Request, ch: int = 0):
 
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------------------------------------------------------------- settings page
+@api.get("/api/v1/settings")
+async def get_settings():
+    """Config as it is in sendust_player.json (password not sent), CasparCG detection, service state."""
+    try:
+        cfg = settings_mod.current_file_config()
+    except (OSError, ValueError) as e:
+        raise HTTPException(500, f"sendust_player.json: {e}")
+    pw = bool(cfg.pop("password", ""))
+    return {"config": cfg, "password_set": pw, "running": app_state.cfg["channels"] == cfg["channels"],
+            "detect": settings_mod.detect(cfg, app_state.engine), "service": await app_state.service.status(),
+            "install_cmd": f"sudo {ROOT}/deploy/install_casparcg_service.sh", "info": app_state.info()}
+
+
+class SettingsSave(BaseModel):
+    config: dict
+    password: str | None = None   # None = keep the current password
+
+
+@api.post("/api/v1/settings")
+async def save_settings(b: SettingsSave, request: Request):
+    try:
+        settings_mod.save_config(b.config, b.password)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    log.info("settings saved (client %s); backend restart applies them", client_ip(request))
+    return {"ok": True, "restart_required": True}
+
+
+@api.post("/api/v1/backend/restart")
+async def backend_restart(request: Request):
+    log.warning("backend restart requested (client %s)", client_ip(request))
+    settings_mod.restart_backend()
+    return {"ok": True}
+
+
+@api.get("/api/v1/caspar/service")
+async def caspar_service():
+    return await app_state.service.status()
+
+
+@api.post("/api/v1/caspar/service/{action}")
+async def caspar_service_action(action: str, request: Request):
+    try:
+        return await app_state.service.action(action, client_ip(request))
+    except settings_mod.ServiceError as e:
+        raise HTTPException(e.status, str(e))
 
 
 @api.post("/api/v1/osd/reload")

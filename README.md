@@ -19,8 +19,13 @@ headless Ubuntu 서버에서 백엔드(FastAPI)와 CasparCG 가 돌고, 운용�
 
 ```bash
 ./run.sh start | stop | restart | log         # 백엔드 (logs/backend.log)
-~/casparcgserver/run_caspar.sh                 # CasparCG (NVIDIA EGL)
+~/casparcgserver/run_caspar.sh                 # CasparCG (NVIDIA EGL) — 서비스 없이 직접 띄울 때
 ```
+
+CasparCG 를 systemd 서비스로 쓰려면 한 번 `sudo ./deploy/install_casparcg_service.sh` (sudo 비밀번호 필요).
+`/etc/systemd/system/casparcg.service` (run_caspar.sh 를 이 사용자로 실행, 정지 후 8초 대기)와,
+백엔드가 `systemctl start|stop|restart|enable|disable casparcg.service` 만 비밀번호 없이 실행하도록 하는
+`/etc/sudoers.d/sendust-casparcg` 를 설치한다. 이후 시작/정지/자동 시작은 환경설정 페이지에서 한다.
 
 처음 설치: `python3 -m venv .venv && .venv/bin/pip install fastapi 'uvicorn[standard]' python-multipart`.
 필요: ffmpeg/ffprobe, CasparCG 2.5, mediamtx(SDI 프리뷰), `libnvidia-gl-580`(CasparCG GPU 합성).
@@ -40,7 +45,8 @@ chrome.exe --app=http://<서버>:8300/launcher.html          # Windows 바로가
 |---|---|
 | 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
 | 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC(클릭: MXF TC ↔ 경과)/DUR/REM(+ Playlist play 시 n/N 과 리스트 전체 남은 시간), IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
-| 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황. 판넬 높이·열 너비 조절. 제목줄 "+ PLAY n" = 선택한 media 클립을 그 채널 리스트에 추가, "↗" = 재생 창 열기 |
+| 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황. 판넬 높이·열 너비 조절. 제목줄 "+ PLAY n" = 선택한 media 클립을 그 채널 리스트에 추가, "↗" = 재생 창 열기. 파일 행을 mpv/VLC 로 끌어 놓거나 "URL" 로 주소를 복사하면 HTTP Range 로 스트리밍(탐색 가능) |
+| 환경설정 | `/settings.html` (런처의 "환경설정", 새 탭) — CasparCG 서비스(시작/정지/재시작/자동 시작 켜기·끄기), 채널 구성(casparcg.config 의 채널·DeckLink 감지, 플랜: 클린만 / 클린+OSD 쌍 / 직접 지정), sendust_player.json 전체 항목. 저장하면 이전 파일은 `sendust_player.json.bak`, "저장 + 백엔드 재시작"으로 바로 적용 (재생은 계속) |
 | 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터), 상단에 접속 클라이언트(IP 와 열린 창) |
 | VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
 | SDI 프리뷰 (단독) | `/sdi.html?ch=<idx>` |
@@ -132,6 +138,10 @@ gang UI 의 origin 을 넣는다.
 | POST | `/api/v1/ch/{idx}/sdi_preview` | `{on, source: clean|osd}` |
 | GET | `/api/v1/media/list`, `/media/probe`, POST `/media/scenes` | 미디어 목록, ffprobe 정보, 장면 전환/오디오 peak |
 | GET | `/api/v1/fs/list` · POST `fs/mkdir|rename|copy|move|delete` · PUT `fs/upload` | 파일 브라우저 |
+| GET, HEAD | `/media/<path>`, `/raw/<media|host>/<path>` | 파일 원본 (HTTP Range 206, inline, 루트 밖 403) — 플레이리스트/브라우저의 "URL" |
+| GET / POST | `/api/v1/settings` | 환경설정 읽기(비밀번호 제외, CasparCG 감지, 서비스 상태) / 저장 `{config, password}` (password null = 유지) |
+| POST | `/api/v1/backend/restart` | 백엔드 재시작 (run.sh restart) |
+| GET / POST | `/api/v1/caspar/service`, `/caspar/service/{start|stop|restart|enable|disable}` | CasparCG 서비스 상태 / 제어 |
 | WS | `/ws?page=<page>&ch=<idx>` | `hello`(전체 상태) 후 `tick`(20 Hz), `playlist`, `log`, `job`, `fs`, `sys`, `clients`, `tc_mode` 이벤트 |
 
 프레임 단위: API 는 원본(소스) 프레임 번호. `out` 은 EDL 처럼 재생되지 않는 첫 프레임(길이 = out − in).
@@ -158,6 +168,7 @@ gang UI 의 origin 을 넣는다.
 | `backend/sysinfo.py`, `backend/loghub.py` | 시스템 정보(mediarouter 와 동일), 로그 뷰어용 로그 버퍼 |
 | `www/launcher.html`, `www/log.html`, `www/css/ump.css`, `www/css/theme.css` | 런처, 로그 뷰어, 부조정실용 스타일, 색 테마 |
 | `config_samples/` | 설정 샘플 |
+| `backend/settings.py`, `www/settings.html`, `deploy/install_casparcg_service.sh` | 환경설정, 채널 감지, CasparCG 서비스 |
 
 ## 알아 둘 CasparCG 2.5 특성 (실측)
 

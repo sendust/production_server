@@ -11,3 +11,12 @@ def commit_stamp() -> str:
         return out.stdout.strip() or "uncommitted"
     except (OSError, subprocess.TimeoutExpired):
         return "unknown"
+
+
+def commit_hash() -> str:
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=3)
+        return out.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""

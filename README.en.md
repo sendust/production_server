@@ -19,8 +19,13 @@ Backend (backend/, :8300) ── AMCP :5250 ──▶ CasparCG ──▶ DeckLin
 
 ```bash
 ./run.sh start | stop | restart | log         # backend (logs/backend.log)
-~/casparcgserver/run_caspar.sh                 # CasparCG (NVIDIA EGL)
+~/casparcgserver/run_caspar.sh                 # CasparCG (NVIDIA EGL) — when started by hand, without the service
 ```
+
+To run CasparCG as a systemd service, run `sudo ./deploy/install_casparcg_service.sh` once (needs the sudo password).
+It installs `/etc/systemd/system/casparcg.service` (runs run_caspar.sh as this user, waits 8 s after a stop) and
+`/etc/sudoers.d/sendust-casparcg`, which lets the backend run only `systemctl start|stop|restart|enable|disable
+casparcg.service` without a password. Start / stop / autostart are then done from the settings page.
 
 First install: `python3 -m venv .venv && .venv/bin/pip install fastapi 'uvicorn[standard]' python-multipart`.
 Requirements: ffmpeg/ffprobe, CasparCG 2.5, mediamtx (SDI preview), `libnvidia-gl-580` (CasparCG GPU mixing).
@@ -42,7 +47,8 @@ Or open the launcher in Chrome → menu → Cast, save, and share → Create sho
 |---|---|
 | Launcher | `http://<server>:8300/` (`launcher.html`) — 150 px on the left. System info (CPU per core + 60 s history, GPU, disk, NICs, CasparCG process age), open log viewer / media browser, "open all" (playback windows side by side on the right; more than two channels keep the two-across size), close all, channel buttons (with state) |
 | Playback | `/player.html?ch=<channel_index>` — clip info (large) or, with Preview ticked, a WebRTC view of the output channel; 8-channel level meter (4×2, fixed; channels the clip does not have are greyed out); TC (click: file TC ↔ elapsed) / DUR / REM (+ n/N and remaining time of the whole list when Playlist play is on); IN/OUT; transport; collapsible zoom timeline; playlist (resizable columns, the on-air line is scrolled into view when it changes). With more than two channels the controls are shown at 80 % |
-| Media browser | `/browser.html` — top: CasparCG media, bottom: a favourite path (tree + list), "Transfer" copies into the current media folder, transfer status. Panel heights and column widths are adjustable. "+ PLAY n" in the title bar adds the selected media clips to that channel's playlist, "↗" opens its window |
+| Media browser | `/browser.html` — top: CasparCG media, bottom: a favourite path (tree + list), "Transfer" copies into the current media folder, transfer status. Panel heights and column widths are adjustable. "+ PLAY n" in the title bar adds the selected media clips to that channel's playlist, "↗" opens its window. Drag file rows onto mpv / VLC, or copy their address with "URL", to stream them over HTTP Range (seekable) |
+| Settings | `/settings.html` ("환경설정" in the launcher, opens a new tab) — CasparCG service (start / stop / restart / autostart on·off), channel plan (channels and DeckLink outputs detected from casparcg.config; plans: clean only / clean + OSD pairs / custom), every key of sendust_player.json. Saving keeps the previous file as `sendust_player.json.bak`; "save + restart backend" applies it at once (playout continues) |
 | Log viewer | `/log.html` — all backend logs (source / level / text filters); connected clients (IP and open pages) at the top |
 | VGA preview | select an MXF item in the list → Preview (V) |
 | SDI preview (stand-alone) | `/sdi.html?ch=<idx>` |
@@ -135,6 +141,10 @@ browser, add the gang UI's origin to `gang.allow_origins`.
 | POST | `/api/v1/ch/{idx}/sdi_preview` | `{on, source: clean|osd}` |
 | GET | `/api/v1/media/list`, `/media/probe`, POST `/media/scenes` | media list, ffprobe info, scene changes / audio peaks |
 | GET | `/api/v1/fs/list` · POST `fs/mkdir|rename|copy|move|delete` · PUT `fs/upload` | file browser |
+| GET, HEAD | `/media/<path>`, `/raw/<media|host>/<path>` | original files (HTTP Range 206, inline, 403 outside the root) — the "URL" buttons |
+| GET / POST | `/api/v1/settings` | read settings (no password, CasparCG detection, service state) / save `{config, password}` (password null = keep) |
+| POST | `/api/v1/backend/restart` | restart the backend (run.sh restart) |
+| GET / POST | `/api/v1/caspar/service`, `/caspar/service/{start|stop|restart|enable|disable}` | CasparCG service state / control |
 | WS | `/ws?page=<page>&ch=<idx>` | `hello` (full state), then `tick` (20 Hz), `playlist`, `log`, `job`, `fs`, `sys`, `clients`, `tc_mode` events |
 
 Frame units: the API uses source frame numbers. `out` is, as in an EDL, the first frame that is not played (length = out − in).
@@ -161,6 +171,7 @@ Frame units: the API uses source frame numbers. `out` is, as in an EDL, the firs
 | `backend/sysinfo.py`, `backend/loghub.py` | system info (same as mediarouter), log buffer for the log viewer |
 | `www/launcher.html`, `www/log.html`, `www/css/ump.css`, `www/css/theme.css` | launcher, log viewer, control-room style, colour themes |
 | `config_samples/` | sample configurations |
+| `backend/settings.py`, `www/settings.html`, `deploy/install_casparcg_service.sh` | settings page, channel detection, CasparCG service |
 
 ## CasparCG 2.5 behaviour worth knowing (measured)
 

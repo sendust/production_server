@@ -24,6 +24,8 @@ DEFAULTS = {
         "video_layer": 10,
         "osd_route_layer": 10,
         "osd_overlay_layer": 20,
+        "config_path": "/usr/share/casparcg-server-2.5/casparcg.config",   # read by the settings page (channel detection)
+        "service": "casparcg.service",                                      # systemd system unit (settings page control)
     },
     "browser": {"lower_root": "/mnt", "favorites": []},
     "shared_playlist_path": "/mnt/storage1",

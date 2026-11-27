@@ -4,3 +4,5 @@ __pycache__/
 logs/
 data/
 ump_screenshot/
+sendust_player.json.bak
+.sendust_player.json.check

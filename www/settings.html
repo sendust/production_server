@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sendust playlist [Settings]</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/sendust.svg">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/ump.css">
+<style>
+  html, body { height: auto; }
+  body { background: #1e1e1e; }
+  .st { max-width: 1180px; margin: 0 auto; padding: 0 16px 90px; }
+  .st-title { position: sticky; top: 0; z-index: 5; display: flex; align-items: baseline; gap: 14px; padding: 12px 16px; margin: 0 -16px;
+    background: #111; border-bottom: 1px solid var(--line); }
+  .st-title h1 { margin: 0; font-size: 22px; }
+  .st-title .sp { flex: 1; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 16px; }
+  .card > h2 { margin: 0; padding: 10px 14px; font-size: 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .card > h2 .sub { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .card .body { padding: 12px 14px; }
+  .note { color: var(--dim); font-size: 13px; margin: 6px 0; }
+  .warn-box { background: #3d2e0a; border: 1px solid #6b5216; color: #ffd27a; border-radius: 4px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
+  .bad-box { background: #4a1414; border: 1px solid #7a2a2a; color: #ffb3ab; border-radius: 4px; padding: 8px 10px; margin: 8px 0; font-size: 14px; white-space: pre-wrap; }
+  code, .mono { font-family: var(--mono); }
+  code.cmd { display: block; background: #0d0f12; border: 1px solid var(--line); padding: 8px 10px; border-radius: 4px; margin: 6px 0; user-select: all; overflow-x: auto; }
+  table.tb { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.tb th { text-align: left; color: var(--dim); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.tb td { padding: 6px 8px; border-bottom: 1px solid #262c33; }
+  table.tb input[type=text], table.tb select { width: 100%; }
+  .row-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 8px 18px; }
+  .fld { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 8px; }
+  .fld > span { color: var(--dim); font-size: 13px; }
+  .fld input[type=text], .fld input[type=number], .fld input[type=password], .fld select { width: 100%; }
+  input[type=text], input[type=number], input[type=password], select {
+    height: 30px; background: #2a3037; color: var(--fg); border: 1px solid var(--btn-edge); border-radius: 4px; padding: 0 8px; font-size: 14px; }
+  input:focus, select:focus { outline: 1px solid var(--cyan); }
+  input.dirty, select.dirty { border-color: var(--warn); }
+  .svc { display: grid; grid-template-columns: 150px 1fr; gap: 4px 10px; font-size: 14px; margin-bottom: 8px; }
+  .svc .k { color: var(--dim); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; gap: 10px; align-items: center; justify-content: center;
+    padding: 10px 16px; background: #111; border-top: 1px solid var(--line); }
+  .savebar .msg { min-width: 260px; text-align: right; color: var(--dim); }
+  .savebar .msg.dirty { color: var(--warn); font-weight: 700; }
+  .ubtn.primary { background: linear-gradient(#2f7fd8, #1d5aa0); color: #fff; }
+  .ubtn.danger { background: linear-gradient(#b33a3a, #7d2222); color: #fff; }
+  .live-on { color: var(--ok); font-weight: 700; } .live-off { color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="st">
+  <header class="st-title"><h1>환경설정</h1><span class="dim mono" id="host"></span><span class="sp"></span>
+    <span class="dim mono" id="ver"></span></header>
+
+  <!-- CasparCG service -->
+  <section class="card" id="svc-card">
+    <h2>CasparCG 서비스 <span class="sub" id="svc-unit"></span></h2>
+    <div class="body">
+      <div class="svc" id="svc"></div>
+      <div id="svc-hint"></div>
+      <div class="row-btns">
+        <button class="ubtn" data-svc="start">시작</button>
+        <button class="ubtn danger" data-svc="stop">정지</button>
+        <button class="ubtn" data-svc="restart">재시작</button>
+        <span style="width:24px"></span>
+        <button class="ubtn" data-svc="enable" title="부팅할 때 자동으로 시작">자동 시작 켜기</button>
+        <button class="ubtn" data-svc="disable" title="부팅할 때 자동으로 시작하지 않음">자동 시작 끄기 (disable)</button>
+        <span class="dim" id="svc-busy"></span>
+      </div>
+      <p class="note">정지 / 재시작하면 모든 송출이 멈춥니다. 정지 뒤에는 DeckLink 가 풀리도록 8초 기다립니다.</p>
+    </div>
+  </section>
+
+  <!-- channel plan -->
+  <section class="card">
+    <h2>채널 구성 <span class="sub" id="cc-path"></span></h2>
+    <div class="body">
+      <table class="tb" id="cc-table"><thead><tr><th>CasparCG 채널</th><th>비디오 모드</th><th>출력 (consumer)</th><th>지금 상태</th><th>현재 설정에서 사용</th></tr></thead><tbody></tbody></table>
+      <div id="cc-err"></div>
+      <div class="row-btns">
+        <span class="dim">채널 플랜:</span>
+        <button class="ubtn" id="plan-clean">클린 출력만</button>
+        <button class="ubtn" id="plan-osd">클린 + OSD 쌍</button>
+        <span class="dim" id="plan-desc"></span>
+      </div>
+      <table class="tb" id="ch-table"><thead><tr><th style="width:40px">#</th><th>재생 채널 이름</th><th>클린 출력</th><th>OSD 출력</th><th>TC 종류</th><th style="width:50px"></th></tr></thead><tbody></tbody></table>
+      <div class="row-btns"><button class="ubtn sm" id="ch-add">+ 재생 채널 추가</button>
+        <label class="uchk"><input type="checkbox" data-k="osd.enabled"> OSD 사용</label></div>
+      <p class="note">클린 출력 = 재생 채널의 프로그램 출력. OSD 출력 = 같은 영상에 TC·파일명을 얹은 출력(CasparCG HTML producer). 한 CasparCG 채널은 한 곳에만 씁니다.</p>
+    </div>
+  </section>
+
+  <section class="card"><h2>일반</h2><div class="body grid" id="g-general"></div></section>
+  <section class="card"><h2>인증</h2><div class="body">
+    <div class="grid" id="g-auth"></div>
+    <p class="note">비밀번호 칸을 비워 두면 지금 비밀번호를 유지합니다. localhost(CasparCG OSD 페이지)는 인증 예외입니다.</p></div></section>
+  <section class="card"><h2>CasparCG 연결</h2><div class="body grid" id="g-caspar"></div></section>
+  <section class="card"><h2>미디어 · 플레이리스트</h2><div class="body grid" id="g-media"></div></section>
+  <section class="card"><h2>OSD 화면</h2><div class="body grid" id="g-osd"></div></section>
+  <section class="card"><h2>SDI 프리뷰 (WebRTC)</h2><div class="body grid" id="g-sdi"></div></section>
+  <section class="card"><h2>외부 제어 · gang</h2><div class="body grid" id="g-ext"></div></section>
+</div>
+
+<div class="savebar">
+  <span class="msg" id="save-msg">변경 없음</span>
+  <button class="ubtn" id="b-reload" title="저장하지 않은 변경을 버리고 다시 읽기">되돌리기</button>
+  <button class="ubtn primary" id="b-save">저장</button>
+  <button class="ubtn primary" id="b-save-restart" title="저장한 뒤 백엔드를 재시작해 바로 적용 (재생은 계속됩니다)">저장 + 백엔드 재시작</button>
+</div>
+<script type="module" src="js/settings.js"></script>
+</body>
+</html>

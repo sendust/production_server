@@ -118,6 +118,7 @@ body { background: var(--bg); }
 .lnch .logo { text-align: center; font-size: 20px; font-weight: 900; letter-spacing: .5px; color: #fff; }
 .lnch .logo small { display: block; font-size: 12px; color: var(--dim); font-weight: 600; }
 .lnch .logo .hostname { display: block; font-size: 20px; overflow-wrap: anywhere; }
+.lnch .logo .ver { display: block; margin-top: 2px; font: 600 11px var(--mono); color: var(--cyan); letter-spacing: 0; }
 .sysbox { background: #111; border: 1px solid #000; padding: 6px 7px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
 .sysbox .r { display: flex; justify-content: space-between; gap: 4px; white-space: nowrap; }
 .sysbox .k { color: var(--dim); }
