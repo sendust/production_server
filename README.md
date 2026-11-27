@@ -41,12 +41,16 @@ chrome.exe --app=http://<서버>:8300/launcher.html          # Windows 바로가
 ```
 또는 Chrome 에서 런처를 열고 메뉴 → 전송, 저장, 공유 → 바로가기 만들기 → "창으로 열기" 체크.
 
+**팝업 허용:** 브라우저는 클릭 한 번에 팝업 창 하나만 열어 준다. "일괄 실행"으로 재생 창을 한 번에 모두 열려면
+`chrome://settings/content/popups` → "팝업 전송 및 리디렉션 사용이 허용됨" 에 `http://<서버>:8300` 을 추가한다.
+허용하지 않으면 버튼이 "다음 창 2/3 ▸" 로 바뀌어 누를 때마다 다음 창을 연다.
+
 | 창 | 주소 |
 |---|---|
-| 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo, 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
+| 런처 | `http://<서버>:8300/` (`launcher.html`) — 왼쪽 150px. sysinfo(CPU·NIC 60초 그래프는 백엔드가 기록해 둔 값으로 바로 그림, CasparCG Age 24시간 넘으면 재시작 권고), 로그 뷰어/미디어 브라우저 열기, 일괄 실행(재생 창을 오른쪽에 나란히), 모두 종료, 채널 버튼(상태 표시) |
 | 재생 창 | `/player.html?ch=<channel_index>` — 클립 정보(큰 글자) 또는 Preview 체크 시 송출 채널 WebRTC 영상, 8ch 레벨미터(4×2 고정, 클립에 없는 채널은 회색), TC(클릭: MXF TC ↔ 경과)/DUR/REM(+ Playlist play 시 n/N 과 리스트 전체 남은 시간), IN/OUT, 트랜스포트, 접이식 확대 타임라인, 리스트 |
 | 미디어 브라우저 | `/browser.html` — 위: CasparCG media, 아래: 즐겨찾기 경로(트리+목록), "전송하기"로 media 현재 폴더에 복사, 전송현황. 판넬 높이·열 너비 조절. 제목줄 "+ PLAY n" = 선택한 media 클립을 그 채널 리스트에 추가, "↗" = 재생 창 열기. 파일 행을 mpv/VLC 로 끌어 놓거나 "URL" 로 주소를 복사하면 HTTP Range 로 스트리밍(탐색 가능) |
-| 환경설정 | `/settings.html` (런처의 "환경설정", 새 탭) — CasparCG 서비스(시작/정지/재시작/자동 시작 켜기·끄기), 채널 구성(casparcg.config 의 채널·DeckLink 감지, 플랜: 클린만 / 클린+OSD 쌍 / 직접 지정), sendust_player.json 전체 항목. 저장하면 이전 파일은 `sendust_player.json.bak`, "저장 + 백엔드 재시작"으로 바로 적용 (재생은 계속) |
+| 환경설정 | `/settings.html` (런처의 "환경설정", 새 탭) — CasparCG 서비스(시작/정지/재시작/자동 시작 켜기·끄기), 채널 구성(casparcg.config 의 채널·DeckLink 감지, 플랜: 클린만 / 클린+OSD 쌍 / 직접 지정), CasparCG 로그 보기(접이식, 파일 선택·줄 수·수준 필터·AMCP 메시지 숨기기·자동 갱신·복사), sendust_player.json 전체 항목. 저장하면 이전 파일은 `sendust_player.json.bak`, "저장 + 백엔드 재시작"으로 바로 적용 (재생은 계속) |
 | 로그 뷰어 | `/log.html` — 백엔드 전체 로그 (소스/레벨/문구 필터), 상단에 접속 클라이언트(IP 와 열린 창) |
 | VGA 프리뷰 | 리스트에서 MXF 항목 선택 → Preview (V) |
 | SDI 프리뷰 (단독) | `/sdi.html?ch=<idx>` |
@@ -139,6 +143,7 @@ gang UI 의 origin 을 넣는다.
 | GET | `/api/v1/media/list`, `/media/probe`, POST `/media/scenes` | 미디어 목록, ffprobe 정보, 장면 전환/오디오 peak |
 | GET | `/api/v1/fs/list` · POST `fs/mkdir|rename|copy|move|delete` · PUT `fs/upload` | 파일 브라우저 |
 | GET, HEAD | `/media/<path>`, `/raw/<media|host>/<path>` | 파일 원본 (HTTP Range 206, inline, 루트 밖 403) — 플레이리스트/브라우저의 "URL" |
+| GET | `/api/v1/caspar/log?file=&lines=500&level=trace&hide_amcp=true` | CasparCG 로그 파일 끝부분 (폴더: `casparcg.log_dir`, 빈 값이면 casparcg.config 의 log-path) |
 | GET / POST | `/api/v1/settings` | 환경설정 읽기(비밀번호 제외, CasparCG 감지, 서비스 상태) / 저장 `{config, password}` (password null = 유지) |
 | POST | `/api/v1/backend/restart` | 백엔드 재시작 (run.sh restart) |
 | GET / POST | `/api/v1/caspar/service`, `/caspar/service/{start|stop|restart|enable|disable}` | CasparCG 서비스 상태 / 제어 |

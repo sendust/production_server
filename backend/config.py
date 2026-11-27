@@ -26,6 +26,7 @@ DEFAULTS = {
         "osd_overlay_layer": 20,
         "config_path": "/usr/share/casparcg-server-2.5/casparcg.config",   # read by the settings page (channel detection)
         "service": "casparcg.service",                                      # systemd system unit (settings page control)
+        "log_dir": "",   # CasparCG log folder for the settings page; "" = <log-path> of casparcg.config
     },
     "browser": {"lower_root": "/mnt", "favorites": []},
     "shared_playlist_path": "/mnt/storage1",

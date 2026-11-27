@@ -43,12 +43,16 @@ chrome.exe --app=http://<server>:8300/launcher.html        # Windows shortcut "T
 ```
 Or open the launcher in Chrome → menu → Cast, save, and share → Create shortcut → tick "Open as window".
 
+**Allow popups:** a browser opens one popup per click. For "open all" to open every playback window at once,
+add `http://<server>:8300` under `chrome://settings/content/popups` → "Allowed to send pop-ups and use redirects".
+Otherwise the button turns into "다음 창 2/3 ▸" (next window) and each click opens the next one.
+
 | Window | Address |
 |---|---|
-| Launcher | `http://<server>:8300/` (`launcher.html`) — 150 px on the left. System info (CPU per core + 60 s history, GPU, disk, NICs, CasparCG process age), open log viewer / media browser, "open all" (playback windows side by side on the right; more than two channels keep the two-across size), close all, channel buttons (with state) |
+| Launcher | `http://<server>:8300/` (`launcher.html`) — 150 px on the left. System info (CPU per core + 60 s history and NIC graphs, kept by the backend so a newly opened launcher shows them at once; GPU, disk; CasparCG process age, with a restart suggestion after 24 h), open log viewer / media browser, "open all" (playback windows side by side on the right; more than two channels keep the two-across size), close all, channel buttons (with state) |
 | Playback | `/player.html?ch=<channel_index>` — clip info (large) or, with Preview ticked, a WebRTC view of the output channel; 8-channel level meter (4×2, fixed; channels the clip does not have are greyed out); TC (click: file TC ↔ elapsed) / DUR / REM (+ n/N and remaining time of the whole list when Playlist play is on); IN/OUT; transport; collapsible zoom timeline; playlist (resizable columns, the on-air line is scrolled into view when it changes). With more than two channels the controls are shown at 80 % |
 | Media browser | `/browser.html` — top: CasparCG media, bottom: a favourite path (tree + list), "Transfer" copies into the current media folder, transfer status. Panel heights and column widths are adjustable. "+ PLAY n" in the title bar adds the selected media clips to that channel's playlist, "↗" opens its window. Drag file rows onto mpv / VLC, or copy their address with "URL", to stream them over HTTP Range (seekable) |
-| Settings | `/settings.html` ("환경설정" in the launcher, opens a new tab) — CasparCG service (start / stop / restart / autostart on·off), channel plan (channels and DeckLink outputs detected from casparcg.config; plans: clean only / clean + OSD pairs / custom), every key of sendust_player.json. Saving keeps the previous file as `sendust_player.json.bak`; "save + restart backend" applies it at once (playout continues) |
+| Settings | `/settings.html` ("환경설정" in the launcher, opens a new tab) — CasparCG service (start / stop / restart / autostart on·off), channel plan (channels and DeckLink outputs detected from casparcg.config; plans: clean only / clean + OSD pairs / custom), CasparCG log viewer (collapsible; file, line count and level filters, hide AMCP messages, auto refresh, copy), every key of sendust_player.json. Saving keeps the previous file as `sendust_player.json.bak`; "save + restart backend" applies it at once (playout continues) |
 | Log viewer | `/log.html` — all backend logs (source / level / text filters); connected clients (IP and open pages) at the top |
 | VGA preview | select an MXF item in the list → Preview (V) |
 | SDI preview (stand-alone) | `/sdi.html?ch=<idx>` |
@@ -142,6 +146,7 @@ browser, add the gang UI's origin to `gang.allow_origins`.
 | GET | `/api/v1/media/list`, `/media/probe`, POST `/media/scenes` | media list, ffprobe info, scene changes / audio peaks |
 | GET | `/api/v1/fs/list` · POST `fs/mkdir|rename|copy|move|delete` · PUT `fs/upload` | file browser |
 | GET, HEAD | `/media/<path>`, `/raw/<media|host>/<path>` | original files (HTTP Range 206, inline, 403 outside the root) — the "URL" buttons |
+| GET | `/api/v1/caspar/log?file=&lines=500&level=trace&hide_amcp=true` | tail of a CasparCG log file (folder: `casparcg.log_dir`, empty = log-path of casparcg.config) |
 | GET / POST | `/api/v1/settings` | read settings (no password, CasparCG detection, service state) / save `{config, password}` (password null = keep) |
 | POST | `/api/v1/backend/restart` | restart the backend (run.sh restart) |
 | GET / POST | `/api/v1/caspar/service`, `/caspar/service/{start|stop|restart|enable|disable}` | CasparCG service state / control |

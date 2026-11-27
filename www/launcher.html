@@ -16,6 +16,7 @@
   <div class="sysbox" id="sys">
     <div class="r"><span class="k">CasparCG</span><span id="s-amcp" class="bad">●</span></div>
     <div class="r" title="CasparCG 서버 프로세스가 시작된 뒤 지난 시간 (재시작/크래시 확인용)"><span class="k">Age</span><span id="s-cage">-</span></div>
+    <div class="age-warn hidden" id="s-cage-warn" title="CasparCG 를 오래 켜 두면 메모리·GPU 자원이 쌓입니다. 송출이 없는 시간에 재시작하세요 (환경설정 → CasparCG 서비스)">24시간 넘게 실행 중<br>재시작 권장</div>
     <div class="r"><span class="k">OSC</span><span id="s-osc" class="bad">●</span></div>
     <div class="sec">
       <div class="r"><span class="k">CPU</span><span id="s-cpu">-</span></div>
@@ -43,6 +44,7 @@
   <button class="ubtn" id="b-settings" title="환경설정 (새 탭): 채널 구성, CasparCG 서비스, 전체 설정">환경설정</button>
   <hr>
   <button class="ubtn" id="b-all" title="모든 재생 창을 화면에 나란히 엽니다">일괄 실행</button>
+  <div class="pop-hint hidden" id="pop-hint"></div>
   <button class="ubtn" id="b-close" title="런처가 연 창을 모두 닫습니다">모두 종료</button>
   <hr>
   <div id="chs" style="display:flex;flex-direction:column;gap:6px"></div>
@@ -84,7 +86,33 @@ const openLog = () => { const s = scr(); const h = Math.round(s.h * 0.4); return
 $("#b-browser").onclick = openBrowser;
 $("#b-settings").onclick = () => window.open("/settings.html", "sendust_settings");   // a normal tab, not a popup
 $("#b-log").onclick = openLog;
-$("#b-all").onclick = () => (info?.channels ?? []).forEach((c, i) => openPlay(c.channel_index, i));
+// 일괄 실행: the browser lets one click open ONE popup unless popups are allowed for this site, so
+// window.open() returns null from the second window on. Then the button becomes "다음 창 (n/N)" and
+// each further click opens the next window, with a hint how to allow popups (then one click opens all).
+let allQueue = [];
+function openAllStep() {
+  while (allQueue.length) {
+    const { idx, i, name } = allQueue[0];
+    if (!openPlay(idx, i)) break;   // blocked: needs another click
+    allQueue.shift();
+  }
+  const b = $("#b-all"), n = info?.channels.length ?? 0;
+  if (allQueue.length) {
+    b.textContent = `다음 창 ${n - allQueue.length + 1}/${n} ▸`;
+    b.classList.add("pending");
+    $("#pop-hint").innerHTML = `브라우저가 팝업을 막아 <b>${esc(allQueue[0].name)}</b> 창이 열리지 않았습니다. 버튼을 다시 누르세요.<br>
+      한 번에 모두 열려면 이 사이트의 팝업을 허용: <code>chrome://settings/content/popups</code> → 허용에 <code>${esc(location.origin)}</code> 추가`;
+    $("#pop-hint").classList.remove("hidden");
+  } else {
+    b.textContent = "일괄 실행";
+    b.classList.remove("pending");
+    $("#pop-hint").classList.add("hidden");
+  }
+}
+$("#b-all").onclick = () => {
+  if (!allQueue.length) allQueue = (info?.channels ?? []).map((c, i) => ({ idx: c.channel_index, i, name: c.name }));
+  openAllStep();
+};
 $("#b-close").onclick = () => {
   for (const w of Object.values(wins)) { try { w.close(); } catch { /* gone */ } }
   bc?.postMessage({ cmd: "close" });   // windows opened before a launcher reload close themselves
@@ -118,6 +146,19 @@ const pct = v => v == null ? "-" : `${v.toFixed(0)}%`;
 const RX = "#3987e5", TX = "#d95926", BAR = "#3987e5", TRACK = "#2a2d31";   // dark-validated pair (dataviz)
 const bps = v => v == null ? "-" : v >= 1e9 ? `${(v / 1e9).toFixed(2)}G` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${(v / 1e3).toFixed(0)}k`;
 const nicHist = new Map();   // name -> [{rx, tx}] last 60 s
+// graph history comes from the backend (sys_hist in hello = last 60 s, then hist_last once per second
+// sample), so a launcher opened later starts with full graphs
+let histT = 0;
+function pushHist(h) {
+  if (!h || h.t <= histT) return;
+  histT = h.t;
+  cpuHist.push(h.cpu); if (cpuHist.length > 60) cpuHist.shift();
+  for (const [name, [rx, tx]] of Object.entries(h.nics || {})) {
+    const a = nicHist.get(name) || [];
+    a.push({ rx, tx }); if (a.length > 60) a.shift();
+    nicHist.set(name, a);
+  }
+}
 
 function canvas2d(c) {
   const dpr = devicePixelRatio || 1, r = c.getBoundingClientRect();
@@ -136,7 +177,6 @@ const cpuHist = [];
 function drawCpu(per, total) {
   const c = $("#g-cpu");
   const [g, w, h] = canvas2d(c);
-  if (total != null) { cpuHist.push(total); if (cpuHist.length > 60) cpuHist.shift(); }
   if (!per?.length) return;
   const n = per.length, gap = n > 48 ? 0 : 1, bw = Math.max(1, (w - gap * (n - 1)) / n);
   per.forEach((v, i) => {
@@ -182,9 +222,6 @@ function drawNics(nics) {
   }
   for (const n of up) {
     const h = nicHist.get(n.name) || [];
-    h.push({ rx: n.rx_bps, tx: n.tx_bps });
-    if (h.length > 60) h.shift();
-    nicHist.set(n.name, h);
     const el = box.querySelector(`[data-nic="${CSS.escape(n.name)}"]`);
     el.querySelector(".rx").textContent = bps(n.rx_bps);
     el.querySelector(".tx").textContent = bps(n.tx_bps);
@@ -212,9 +249,13 @@ connectWs(m => {
   }
   const s = m.type === "hello" ? m.sys : m.type === "sys" ? m : null;
   if (!s) return;
+  if (m.type === "hello") { cpuHist.length = 0; nicHist.clear(); histT = 0; (m.sys_hist || []).forEach(pushHist); }
+  pushHist(s.hist_last);
   const sy = s.sys || {};
   $("#s-cage").textContent = age(s.caspar_age);
-  $("#s-cage").className = s.caspar_age == null ? "bad" : "";
+  const old = s.caspar_age != null && s.caspar_age >= 86400;   // a day or more: suggest a restart
+  $("#s-cage").className = s.caspar_age == null ? "bad" : old ? "warn" : "";
+  $("#s-cage-warn").classList.toggle("hidden", !old);
   // ON = answering AMCP; NO RESP = process still there but not answering (hung, or crashed and
   // writing its core dump); OFF = no process
   $("#s-amcp").className = s.amcp ? "ok" : "bad";

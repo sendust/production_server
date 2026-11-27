@@ -1,5 +1,7 @@
 """System status collector (1 s tick). Taken from ~/mediarouter/app/sysinfo.py (same collector, same
 fields) so both tools report the machine the same way."""
+import collections
+import json
 import os
 import shutil
 import socket
@@ -137,9 +139,16 @@ class SysInfo(threading.Thread):
     GPU_PERIOD = 2.0   # nvidia-smi loop interval (seconds)
     GPU_RETRY = 60.0   # restart delay after the loop process dies (driver reload etc.)
 
-    def __init__(self, count_ffmpeg: bool = False):
+    HIST_LEN = 60   # samples (1 s) kept for the launcher graphs: total CPU and RX/TX per NIC
+
+    def __init__(self, count_ffmpeg: bool = False, hist_file=None):
         super().__init__(name="sysinfo", daemon=True)
         self.count_ffmpeg = count_ffmpeg
+        # sendust playlist: the last 60 s live in the backend, so a launcher opened (or reloaded)
+        # later draws full graphs at once; kept in a file over a backend restart
+        self.hist_file = hist_file
+        self.hist = collections.deque(maxlen=self.HIST_LEN)
+        self._load_hist()
         self._stop = threading.Event()
         self.static = {
             "hostname": socket.gethostname(),
@@ -223,17 +232,47 @@ class SysInfo(threading.Thread):
             "gpus": self._gpus,
         })
         self.snapshot = snap
+        self.hist.append({"t": round(now, 1), "cpu": round(snap["cpu_percent"], 1),
+                          "nics": {n["name"]: [round(n["rx_bps"]), round(n["tx_bps"])] for n in nics if n["ips"]}})
+
+    def history(self) -> list:
+        return list(self.hist)
+
+    def _load_hist(self):
+        if not self.hist_file:
+            return
+        try:
+            old = json.loads(self.hist_file.read_text())
+        except (OSError, ValueError):
+            return
+        cut = time.time() - self.HIST_LEN
+        self.hist.extend(h for h in old if isinstance(h, dict) and h.get("t", 0) > cut)
+
+    def save_hist(self):
+        if not self.hist_file:
+            return
+        try:
+            tmp = self.hist_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(list(self.hist)))
+            tmp.replace(self.hist_file)
+        except OSError as e:
+            log.warning("sysinfo history not saved: %s", e)
 
     def run(self):
         psutil.cpu_percent(None)
         psutil.cpu_percent(None, percpu=True)
+        n = 0
         while not self._stop.wait(1.0):
             try:
                 self.collect()
             except Exception:
                 log.exception("sysinfo collect failed")
+            n += 1
+            if n % 10 == 0:   # also on stop(); every 10 s covers a kill
+                self.save_hist()
 
     def stop(self):
         self._stop.set()
+        self.save_hist()
         if self._gpu:
             self._gpu.stop()

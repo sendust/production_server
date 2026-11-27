@@ -1,6 +1,6 @@
 // Settings page: CasparCG service control, channel plan (from casparcg.config), every key of
 // sendust_player.json. Saving writes the file; a backend restart applies it.
-import { $, $$, api, esc, toast, ask } from "./common.js";
+import { $, $$, api, esc, toast, ask, copyText, fmtBytes } from "./common.js";
 
 let base = null;      // config as loaded (for "dirty")
 let cfg = null;       // working copy
@@ -17,7 +17,8 @@ const GROUPS = {
     ["casparcg.osc_port", "OSC 수신 포트", "int"], ["casparcg.media_path", "media 경로", "text"],
     ["casparcg.template_path", "template 경로", "text"], ["casparcg.video_layer", "재생 레이어", "int"],
     ["casparcg.osd_route_layer", "OSD route 레이어", "int"], ["casparcg.osd_overlay_layer", "OSD 오버레이 레이어", "int"],
-    ["casparcg.config_path", "casparcg.config 경로", "text"], ["casparcg.service", "서비스 이름 (systemd)", "text"]],
+    ["casparcg.config_path", "casparcg.config 경로", "text"], ["casparcg.service", "서비스 이름 (systemd)", "text"],
+    ["casparcg.log_dir", "로그 폴더 (빈 값 = casparcg.config)", "text"]],
   "g-media": [["browser.lower_root", "브라우저 아래 판넬 시작 경로", "text"], ["shared_playlist_path", "공유 리스트 A~D 폴더", "text"],
     ["playlist.image_sec", "이미지 기본 길이 (초)", "num"], ["zoom_timeline.seconds", "확대 타임라인 ± 초", "num"]],
   "g-osd": [["osd.update_frames", "갱신 주기 (프레임)", "int"], ["osd.offset_frames", "TC 지연 보정 (프레임)", "int"],
@@ -212,6 +213,63 @@ for (const b of $$("[data-svc]")) b.onclick = async () => {
   catch (e) { toast(e.message, 6000); pollService(); }
   finally { $("#svc-busy").textContent = ""; }
 };
+
+// ---- CasparCG log ----------------------------------------------------------------------------
+const lstore = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+};
+let logText = "", logBusy = false;
+const logCard = $("#log-card");
+for (const [id, key] of [["#log-lines", "sp.logLines"], ["#log-level", "sp.logLevel"]]) {
+  $(id).value = lstore.get(key, $(id).value);
+  $(id).onchange = () => { lstore.set(key, $(id).value); loadLog(true); };
+}
+$("#log-hide").checked = lstore.get("sp.logHide", "1") === "1";
+$("#log-hide").onchange = () => { lstore.set("sp.logHide", $("#log-hide").checked ? "1" : "0"); loadLog(true); };
+$("#log-follow").checked = lstore.get("sp.logFollow", "0") === "1";
+$("#log-follow").onchange = () => { lstore.set("sp.logFollow", $("#log-follow").checked ? "1" : "0"); if ($("#log-follow").checked) loadLog(true); };
+$("#log-file").onchange = () => loadLog(true);
+$("#log-refresh").onclick = () => loadLog(true);
+$("#log-copy").onclick = async () => {
+  if (!logText) return toast("복사할 로그가 없습니다");
+  toast(await copyText(logText) ? `로그 ${logText.split("\n").length}줄 복사됨` : "복사 실패 (브라우저가 클립보드를 막음)", 1500);
+};
+logCard.open = lstore.get("sp.logOpen", "0") === "1";
+logCard.ontoggle = () => { lstore.set("sp.logOpen", logCard.open ? "1" : "0"); if (logCard.open) loadLog(true); };
+
+const lvClass = l => /\] \[(error|fatal)\]/.test(l) ? "e" : /\] \[warning\]/.test(l) ? "w" : /\] \[(debug|trace)\]/.test(l) ? "d" : "";
+async function loadLog(toBottom) {
+  if (!logCard.open || logBusy) return;
+  logBusy = true;
+  const view = $("#log-view");
+  const atBottom = view.scrollTop + view.clientHeight >= view.scrollHeight - 30;
+  try {
+    const q = new URLSearchParams({ lines: $("#log-lines").value, level: $("#log-level").value, hide_amcp: $("#log-hide").checked });
+    if ($("#log-file").value) q.set("file", $("#log-file").value);
+    const r = await api(`caspar/log?${q}`);
+    $("#log-path").textContent = r.dir;
+    const sel = $("#log-file"), names = r.files.map(f => f.name).join("|");
+    if (sel.dataset.names !== names) {   // keep the choice while the list is the same
+      sel.dataset.names = names;
+      sel.innerHTML = r.files.map(f => `<option value="${esc(f.name)}">${esc(f.name)} (${fmtBytes(f.size)})</option>`).join("");
+    }
+    if (r.file) sel.value = r.file;
+    if (r.error) { $("#log-info").textContent = `읽을 수 없음: ${r.error}`; view.textContent = ""; logText = ""; return; }
+    const when = r.mtime ? new Date(r.mtime * 1000).toLocaleString("ko-KR", { hour12: false }) : "-";
+    $("#log-info").textContent = r.file ? `${r.file} · ${fmtBytes(r.size)} · 마지막 기록 ${when} · ${r.lines.length}줄${r.more ? " (앞부분 생략)" : ""}` : "로그 파일 없음";
+    const text = r.lines.join("\n");
+    if (text !== logText) {
+      logText = text;
+      view.innerHTML = r.lines.map(l => { const c = lvClass(l); return c ? `<span class="${c}">${esc(l)}</span>` : esc(l); }).join("\n");
+    }
+    if (toBottom || atBottom) view.scrollTop = view.scrollHeight;   // follow the end unless scrolled up
+  } catch (e) {
+    $("#log-info").textContent = `로그 읽기 실패: ${e.message}`;
+  } finally { logBusy = false; }
+}
+setInterval(() => { if ($("#log-follow").checked) loadLog(false); }, 2000);
+if (logCard.open) loadLog(true);
 
 // ---- load ---------------------------------------------------------------------------------
 async function load() {

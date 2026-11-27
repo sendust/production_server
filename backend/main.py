@@ -114,7 +114,7 @@ class App:
         self.hub = Hub()
         self.loghub = LogHub(self.hub.broadcast)
         logging.getLogger().addHandler(self.loghub)
-        self.sysinfo = SysInfo()
+        self.sysinfo = SysInfo(hist_file=DATA / "sys_history.json")
         c = self.cfg["casparcg"]
         self.amcp = Amcp(c["host"], c["amcp_port"], on_state=self._amcp_state)
         self.media = Media(c["media_path"])
@@ -218,7 +218,9 @@ class App:
             disk = {"total": du.total, "free": du.free}
         except OSError:
             disk = None
+        last = self.sysinfo.hist[-1] if self.sysinfo.hist else None
         return {"type": "sys", "sys": self.sysinfo.snapshot, "amcp": self.amcp.responsive, "media_disk": disk,
+                "hist_last": last,   # newest graph sample; the launcher appends it once (by its t)
                 "caspar_age": self.caspar_age(),
                 "players": [{"idx": p.idx, "name": p.name, "status": p.status(),
                              "clip": p.loaded["name"] if p.loaded else None} for p in self.players],
@@ -815,6 +817,16 @@ async def caspar_service():
     return await app_state.service.status()
 
 
+@api.get("/api/v1/caspar/log")
+async def caspar_log(file: str | None = None, lines: int = 500, hide_amcp: bool = True, level: str = "trace"):
+    """Tail of a CasparCG log file (settings page log viewer)."""
+    try:
+        return await asyncio.to_thread(settings_mod.read_caspar_log, app_state.cfg, app_state.caspar_pid(),
+                                       file, lines, hide_amcp, level)
+    except FileNotFoundError:
+        raise HTTPException(404, "no such log file")
+
+
 @api.post("/api/v1/caspar/service/{action}")
 async def caspar_service_action(action: str, request: Request):
     try:
@@ -848,6 +860,8 @@ async def ws_endpoint(ws: WebSocket):
                  playlists={p.idx: p.pl.view() for p in app_state.players},
                  jobs=app_state.jobs.list(), favorites=app_state.favorites.data,
                  sys=app_state.sys_msg(), syslog=app_state.loghub.recent(300), clients=hub.client_list())
+    if ws.query_params.get("page") == "launcher":   # the graphs start with the last 60 s
+        hello["sys_hist"] = app_state.sysinfo.history()
     await hub.send(ws, hello)
     try:
         while True:

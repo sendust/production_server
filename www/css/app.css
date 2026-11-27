@@ -76,6 +76,18 @@ header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 #sc-head { position: absolute; top: 0; bottom: 14px; width: 2px; margin-left: -1px; background: var(--playhead); pointer-events: none; }
 #sc-hover { position: absolute; top: -22px; transform: translateX(-50%); background: #000d; color: #fff; font: 11px var(--mono);
   padding: 2px 6px; border-radius: 3px; white-space: pre; pointer-events: none; z-index: 2; }
+/* analysing: dim the strip, a sliding bar and a big label in the middle, pulsing ✂ button */
+#sc-busy { display: none; position: absolute; inset: 0; z-index: 3; background: #0b0e12cc; border-radius: 4px;
+  flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: progress; }
+.sc-box.busy #sc-busy { display: flex; }
+.sc-box.busy #sc-empty { visibility: hidden; }
+#sc-busy-t { color: #ffd54a; font: 700 18px var(--mono); letter-spacing: .5px; animation: sc-blink 1s ease-in-out infinite; }
+.sc-busy-bar { position: relative; width: 60%; height: 6px; background: #ffffff1a; border-radius: 3px; overflow: hidden; }
+.sc-busy-bar i { position: absolute; top: 0; bottom: 0; width: 30%; background: linear-gradient(90deg, transparent, #ffd54a, transparent);
+  animation: sc-slide 1.1s linear infinite; }
+@keyframes sc-slide { from { left: -30%; } to { left: 100%; } }
+@keyframes sc-blink { 50% { opacity: .45; } }
+#sc-run:disabled { opacity: 1; color: #ffd54a; animation: sc-blink 1s ease-in-out infinite; }
 #sc-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; pointer-events: none; }
 [hidden] { display: none !important; }
 

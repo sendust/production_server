@@ -55,10 +55,15 @@ export class Scenes {
     this.range.value = r;
     this.busy = true;
     $("#sc-run").disabled = true;
+    this.box.classList.add("busy");   // overlay: moving bar + "SCENE 분석 중" over the strip
     const t0 = performance.now();
-    const tick = () => { $("#sc-info").textContent = `분석 중… ${((performance.now() - t0) / 1000).toFixed(0)}s`; };
+    const tick = () => {
+      const s = `${((performance.now() - t0) / 1000).toFixed(0)}s`;
+      $("#sc-info").textContent = `분석 중… ${s}`;
+      $("#sc-busy-t").textContent = `SCENE 분석 중 · ±${r}s · ${s}`;
+    };
     tick();
-    const timer = setInterval(tick, 500);
+    const timer = setInterval(tick, 250);
     try {
       // a request stuck in the browser (all connections to the server busy, network stall) must not
       // leave the strip "analysing" forever
@@ -72,6 +77,7 @@ export class Scenes {
     } finally {
       clearInterval(timer);
       this.busy = false;
+      this.box.classList.remove("busy");
       $("#sc-run").disabled = false;
     }
   }
@@ -98,7 +104,14 @@ export class Scenes {
 
   // ---- interaction --------------------------------------------------------
   park(k) { this.h.pause(); this.h.seek(k); }
-  click(e) { if (this.data) { this.park(this.pick(e).k); this.h.focus(); } }
+  // playback window (host.clickSeek): a click moves the playhead like the main timeline, PLAY stays
+  // PLAY and PAUSE stays PAUSE. Preview editor: park (pause) on the frame. Cut keys always park.
+  click(e) {
+    if (!this.data || this.busy) return;
+    const k = this.pick(e).k;
+    this.h.clickSeek ? this.h.clickSeek(k) : this.park(k);
+    this.h.focus();
+  }
 
   step(dir) {   // Ctrl+← / Ctrl+→
     const cur = this.h.pos() ?? 0, cuts = this.cuts();

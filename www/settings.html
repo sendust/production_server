@@ -17,8 +17,8 @@
   .st-title h1 { margin: 0; font-size: 22px; }
   .st-title .sp { flex: 1; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 16px; }
-  .card > h2 { margin: 0; padding: 10px 14px; font-size: 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
-  .card > h2 .sub { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .card > h2, .card > summary > h2 { margin: 0; padding: 10px 14px; font-size: 17px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+  .card > h2 .sub, .card > summary > h2 .sub { font-size: 13px; font-weight: 400; color: var(--dim); }
   .card .body { padding: 12px 14px; }
   .note { color: var(--dim); font-size: 13px; margin: 6px 0; }
   .warn-box { background: #3d2e0a; border: 1px solid #6b5216; color: #ffd27a; border-radius: 4px; padding: 8px 10px; margin: 8px 0; font-size: 14px; }
@@ -47,6 +47,15 @@
   .savebar .msg.dirty { color: var(--warn); font-weight: 700; }
   .ubtn.primary { background: linear-gradient(#2f7fd8, #1d5aa0); color: #fff; }
   .ubtn.danger { background: linear-gradient(#b33a3a, #7d2222); color: #fff; }
+  details.card > summary { list-style: none; cursor: pointer; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary h2::before { content: "▸"; color: var(--dim); width: 12px; }
+  details.card[open] > summary h2::before { content: "▾"; }
+  details.card:not([open]) > summary h2 { border-bottom: 0; }
+  .log-tools select { width: auto; }
+  pre.logview { margin: 8px 0 0; height: 440px; min-height: 120px; resize: vertical; overflow: auto; background: #0d0f12; border: 1px solid var(--line);
+    border-radius: 4px; padding: 6px 8px; font: 12px/1.45 var(--mono); white-space: pre; user-select: text; color: #c9d1d9; }
+  pre.logview .w { color: #ffd27a; } pre.logview .e { color: #ff8a80; font-weight: 700; } pre.logview .d { color: #7d8590; }
   .live-on { color: var(--ok); font-weight: 700; } .live-off { color: var(--dim); }
 </style>
 </head>
@@ -73,6 +82,27 @@
       <p class="note">정지 / 재시작하면 모든 송출이 멈춥니다. 정지 뒤에는 DeckLink 가 풀리도록 8초 기다립니다.</p>
     </div>
   </section>
+
+  <!-- CasparCG log (folded by default; open state remembered) -->
+  <details class="card" id="log-card">
+    <summary><h2>CasparCG 로그 <span class="sub mono" id="log-path"></span></h2></summary>
+    <div class="body">
+      <div class="row-btns log-tools">
+        <select id="log-file" title="로그 파일 (최근 수정 순)"></select>
+        <select id="log-lines" title="보여 줄 줄 수 (끝에서부터)">
+          <option value="200">200줄</option><option value="500" selected>500줄</option><option value="2000">2000줄</option><option value="5000">5000줄</option></select>
+        <select id="log-level" title="이 수준 이상만">
+          <option value="trace">모든 수준</option><option value="info">info 이상</option><option value="warning">warning 이상</option><option value="error">error 이상</option></select>
+        <label class="uchk" title="AMCP 명령 수신/응답과 localhost 접속 줄 숨기기 (백엔드가 매초 보내는 명령)"><input type="checkbox" id="log-hide" checked> AMCP 메시지 숨기기</label>
+        <label class="uchk" title="2초마다 다시 읽고 맨 아래로"><input type="checkbox" id="log-follow"> 자동 갱신</label>
+        <span class="sp" style="flex:1"></span>
+        <button class="ubtn sm" id="log-refresh">새로 읽기</button>
+        <button class="ubtn sm" id="log-copy" title="보이는 로그 전체를 클립보드로">복사</button>
+      </div>
+      <div class="note mono" id="log-info"></div>
+      <pre class="logview" id="log-view"></pre>
+    </div>
+  </details>
 
   <!-- channel plan -->
   <section class="card">

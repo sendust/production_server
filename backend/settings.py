@@ -13,6 +13,7 @@ import copy
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import time
@@ -75,6 +76,103 @@ def detect(cfg: dict, engine) -> dict:
             used.setdefault(c["osd_out"], []).append(f'{c["name"]} OSD')
     cc["used"] = {str(k): v for k, v in used.items()}
     return cc
+
+
+# ------------------------------------------------------------------ CasparCG log files
+LOG_MAX_LINES = 5000
+LOG_SCAN_BYTES = 16 << 20   # read at most the last 16 MB of a file when filtering
+AMCP_NOISE = ("Received message from", "Sent message to", "Client 127.0.0.1 disconnected",
+              "Accepted connection from 127.0.0.1")
+LEVELS = ["trace", "debug", "info", "warning", "error", "fatal"]
+EMPTY_LINE = re.compile(r"\[[^\]]*\] \[\w+\]\s*")   # "[time] [warning]" with no text (ffmpeg's trailing newlines)
+
+
+def caspar_log_dir(cfg: dict, caspar_pid: int | None) -> Path:
+    """casparcg.log_dir, else <log-path> of casparcg.config. A relative log-path is relative to the
+    CasparCG working directory: the running server's cwd, else ~/casparcgserver (run_caspar.sh)."""
+    explicit = (cfg["casparcg"].get("log_dir") or "").strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    lp = "log/"
+    try:
+        el = ET.parse(cfg["casparcg"].get("config_path", "")).getroot().find("./log-path")
+        if el is not None and el.text and el.text.strip():
+            lp = el.text.strip()
+    except (OSError, ET.ParseError):
+        pass
+    if os.path.isabs(lp):
+        return Path(lp)
+    base = None
+    if caspar_pid:
+        try:
+            base = Path(os.readlink(f"/proc/{caspar_pid}/cwd"))
+        except OSError:
+            pass
+    return (base or Path.home() / "casparcgserver") / lp
+
+
+def _tail(path: Path, keep, n: int) -> tuple[list[str], bool]:
+    """Last n lines of path for which keep(line) is true, reading backwards in blocks.
+    Returns (lines, more) where more = older matching lines exist (or the scan limit was hit)."""
+    out, rest, read, cut = [], b"", 0, False
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        pos = f.tell()
+        while pos > 0 and len(out) < n and read < LOG_SCAN_BYTES:
+            step = min(256 << 10, pos)
+            pos -= step
+            f.seek(pos)
+            buf = f.read(step) + rest
+            read += step
+            parts = buf.split(b"\n")
+            rest = parts.pop(0) if pos > 0 else b""   # first piece may be a partial line
+            for raw in reversed(parts):
+                line = raw.decode("utf-8", "replace").rstrip("\r")
+                if line and keep(line):
+                    out.append(line)
+                    if len(out) >= n:
+                        cut = True
+                        break
+        more = pos > 0 or cut
+    out.reverse()
+    return out, more
+
+
+def read_caspar_log(cfg: dict, caspar_pid, name: str | None, lines: int, hide_amcp: bool, level: str) -> dict:
+    d = caspar_log_dir(cfg, caspar_pid)
+    try:
+        files = sorted((p for p in d.iterdir() if p.is_file() and p.suffix == ".log"),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError as e:
+        return {"dir": str(d), "files": [], "file": None, "lines": [], "error": str(e)}
+    listing = [{"name": p.name, "size": p.stat().st_size, "mtime": p.stat().st_mtime} for p in files]
+    if name:
+        pick = next((p for p in files if p.name == name), None)   # only names from the listing
+        if pick is None:
+            raise FileNotFoundError(name)
+    else:   # newest CasparCG log (caspar_YYYY-MM-DD.log), else the newest .log
+        pick = next((p for p in files if p.name.startswith("caspar")), files[0] if files else None)
+    if pick is None:
+        return {"dir": str(d), "files": listing, "file": None, "lines": []}
+    min_lv = LEVELS.index(level) if level in LEVELS else 0
+
+    def keep(line: str) -> bool:
+        if EMPTY_LINE.fullmatch(line):
+            return False
+        if hide_amcp and any(k in line for k in AMCP_NOISE):
+            return False
+        if min_lv:
+            i = line.find("] [")   # "[date time] [level]   text"
+            lv = line[i + 3:line.find("]", i + 3)] if 0 < i < 40 else ""
+            if lv in LEVELS and LEVELS.index(lv) < min_lv:
+                return False
+            if lv not in LEVELS:   # continuation lines (stack traces) only with "all"
+                return False
+        return True
+
+    out, more = _tail(pick, keep, max(1, min(LOG_MAX_LINES, lines)))
+    return {"dir": str(d), "files": listing, "file": pick.name, "size": pick.stat().st_size,
+            "mtime": pick.stat().st_mtime, "lines": out, "more": more}
 
 
 # ------------------------------------------------------------------ config file

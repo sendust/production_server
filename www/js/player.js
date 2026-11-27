@@ -58,8 +58,9 @@ function stateWord(p) {
 }
 
 // ---------------------------------------------------------------- components
+// clicking / dragging on the timeline only moves the playhead: SEEK keeps a playing clip playing
+// and a paused one paused
 const timeline = new Timeline($("#timeline"), {
-  onScrubStart: () => { if (S.p?.status === "playing") cmd("pause"); },
   onScrub: (f, final) => scrubTo(f, final),
 });
 const meter = new GridMeter($("#meter"), 2);
@@ -71,6 +72,7 @@ function makeScenes() {
     pos: () => { const f = livePos(); return f == null ? null : Math.floor(f); },
     status: () => S.p?.status,
     seek: f => seekTo(f),
+    clickSeek: f => seekTo(f),
     pause: () => { if (S.p?.status === "playing") cmd("pause"); },
     focus: () => document.body.focus({ preventScroll: true }),
     tcBase: () => tcBase(),
