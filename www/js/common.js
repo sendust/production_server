@@ -149,6 +149,31 @@ export function openWin(url, name, w, h) {
   return win;
 }
 
+// ---- local files over HTTP Range (mpv / VLC can stream and seek) ----------------
+// root = "media" (CasparCG media path) | "host" (media browser lower panel); every path segment is
+// encoded on its own, so Korean names and spaces survive.
+export function rawUrl(root, path) {
+  const enc = String(path).split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  return `${location.origin}${root === "media" ? "/media/" : `/raw/${root}/`}${enc}`;
+}
+// Drag payload understood by external players (and by text drops: one URL per line).
+export function setDragUrls(dt, urls) {
+  if (!urls.length) return;
+  dt.setData("text/uri-list", urls.join("\r\n"));
+  dt.setData("text/plain", urls.join("\n"));
+}
+// Clipboard: navigator.clipboard needs a secure context, plain http://<ip> falls back to execCommand.
+export async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* not a secure context */ }
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.append(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch { /* */ }
+  ta.remove();
+  return ok;
+}
+
 // Resizable table columns: drag the right edge of a header cell; double-click it for automatic widths.
 // Every column except the last gets a fixed px width (the last takes what is left); remembered in
 // localStorage under `key`. The table gets class "rzt" (+ "fixed" once widths are set).

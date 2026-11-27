@@ -1,6 +1,6 @@
 // Media browser (uBrowser-like): upper pane = CasparCG media path, lower pane = one favourite path,
 // each with a folder tree and a file list; "전송하기" copies the lower selection into the upper folder.
-import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout, openWin, resizableColumns } from "./common.js";
+import { $, $$, api, connectWs, durTc, fmtBytes, esc, ask, toast, DND_MEDIA, addLogout, openWin, resizableColumns, rawUrl, setDragUrls, copyText } from "./common.js";
 import { initTheme } from "./theme.js";
 
 const S = { info: null, favorites: [], jobs: new Map(), session: {}, active: null };
@@ -67,7 +67,8 @@ class Pane {
       if (!this.sel.has(it.path)) { this.sel = new Set([it.path]); this.cursor = Number(tr.dataset.i); this.paint(); }
       const paths = this.selected().map(x => x.path);
       e.dataTransfer.setData(DND_MEDIA, JSON.stringify({ root: this.root, paths }));
-      e.dataTransfer.setData("text/plain", paths.join("\n"));
+      // dropped on mpv / VLC: stream the files over HTTP Range
+      setDragUrls(e.dataTransfer, this.selected().filter(x => !x.dir).map(x => rawUrl(this.root, x.path)));
       e.dataTransfer.effectAllowed = "copyMove";
       dragSource = this;
     });
@@ -259,6 +260,11 @@ class Pane {
     try {
       if (op === "refresh") { this.nodes.forEach(n => { n.kids = null; }); await this.open(this.dir, true); }
       else if (op === "transfer") { if (this !== media && sel.length) transfer(this, sel.map(x => x.path)); }
+      else if (op === "url") {
+        const urls = sel.filter(x => !x.dir).map(x => rawUrl(this.root, x.path));
+        if (!urls.length) toast("파일을 먼저 선택하세요");
+        else toast(await copyText(urls.join("\n")) ? `URL ${urls.length}개 복사됨` : urls.join("\n"), 2500);
+      }
       else if (op === "favadd") toggleFav(this.dir, true);
       else if (op === "favdel") removeFav();
       else if (this.root !== "media") return;   // file operations only in the CasparCG media pane

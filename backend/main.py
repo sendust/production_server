@@ -291,7 +291,7 @@ async def auth_guard(request: Request, call_next):
     if a.enabled and request.method != "OPTIONS":
         path = request.url.path
         if not a.allowed(path, client_ip(request), request.cookies.get(COOKIE), request.headers.get("x-api-key")):
-            if path.startswith(("/api/", "/media/", "/ws")):
+            if path.startswith(("/api/", "/media/", "/raw/", "/ws")):
                 return JSONResponse({"detail": "login required"}, status_code=401)
             nxt = path + (f"?{request.url.query}" if request.url.query else "")
             return RedirectResponse(f"/login.html?next={urlquote(nxt)}")
@@ -802,16 +802,41 @@ async def ws_endpoint(ws: WebSocket):
         hub.drop(ws)
 
 
-@api.get("/media/{path:path}")
+# Local media over HTTP Range (skill web-file-browser §3): GET + HEAD (mpv / VLC probe with HEAD),
+# inline disposition, a real MIME type. Starlette's FileResponse answers "Range: bytes=a-b" with 206.
+RAW_TYPES = {".mxf": "application/mxf", ".mov": "video/quicktime", ".mp4": "video/mp4", ".m4v": "video/mp4",
+             ".ts": "video/mp2t", ".m2ts": "video/mp2t", ".mts": "video/mp2t", ".mkv": "video/x-matroska",
+             ".mpg": "video/mpeg", ".mpeg": "video/mpeg", ".avi": "video/x-msvideo", ".webm": "video/webm",
+             ".wav": "audio/wav", ".mp3": "audio/mpeg", ".mp2": "audio/mpeg", ".aac": "audio/aac", ".flac": "audio/flac",
+             ".m4a": "audio/mp4", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".tga": "image/x-tga",
+             ".bmp": "image/bmp", ".gif": "image/gif", ".tif": "image/tiff", ".tiff": "image/tiff"}
+
+
+def raw_response(p: Path) -> FileResponse:
+    if not p.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(p, media_type=RAW_TYPES.get(p.suffix.lower(), "application/octet-stream"),
+                        content_disposition_type="inline", filename=p.name, headers={"Cache-Control": "no-cache"})
+
+
+@api.api_route("/media/{path:path}", methods=["GET", "HEAD"])
 async def media_file(path: str):
-    """Original media with HTTP Range support (VGA preview reads MXF GOPs with Range requests)."""
+    """CasparCG media (VGA preview reads MXF GOPs with Range requests; external players stream + seek)."""
     try:
         p = app_state.media.abs(path)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    if not p.is_file():
-        raise HTTPException(404, "not found")
-    return FileResponse(p, headers={"Cache-Control": "no-cache"})
+    return raw_response(p)
+
+
+@api.api_route("/raw/{root}/{path:path}", methods=["GET", "HEAD"])
+async def raw_file(root: str, path: str):
+    """A file of either media-browser panel (root = media | host), confined to that root."""
+    try:
+        p = app_state.roots.abs(root, path)
+    except FsError as e:
+        raise HTTPException(403, str(e))
+    return raw_response(p)
 
 
 @api.get("/")

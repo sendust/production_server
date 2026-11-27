@@ -1,5 +1,5 @@
 // Playlist panel of the playback window.
-import { $, $$, api, esc, ask, toast, durTc, framesToTc, tcToFrames, DND_MEDIA, openWin, resizableColumns } from "./common.js";
+import { $, $$, api, esc, ask, toast, durTc, framesToTc, tcToFrames, DND_MEDIA, openWin, resizableColumns, rawUrl, setDragUrls, copyText } from "./common.js";
 
 const DND_PL = "application/x-sendust-plitem";
 const SLOTS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D"];
@@ -239,7 +239,10 @@ export class PlaylistUI {
       const tr = e.target.closest("tr"); if (!tr) return;
       if (!this.sel.has(tr.dataset.id)) { this.sel = new Set([tr.dataset.id]); this.render(); }
       e.dataTransfer.setData(DND_PL, JSON.stringify({ ch: this.ch, ids: this.selectedIds() }));
-      e.dataTransfer.effectAllowed = "move";
+      // dropped on mpv / VLC: stream the clips over HTTP Range
+      setDragUrls(e.dataTransfer, this.selectedIds().map(id => this.pl.items.find(i => i.id === id))
+        .filter(it => it?.type === "clip").map(it => rawUrl("media", it.file)));
+      e.dataTransfer.effectAllowed = "copyMove";
     });
     list.addEventListener("dragover", e => {
       const t = e.dataTransfer.types;
@@ -313,6 +316,12 @@ export class PlaylistUI {
     $("#pl-preview").onclick = () => this.openPreview();
     $("#pl-up") && ($("#pl-up").onclick = () => this._moveSel(-1));
     $("#pl-down") && ($("#pl-down").onclick = () => this._moveSel(1));
+    $("#pl-url") && ($("#pl-url").onclick = async () => {
+      const urls = this.selectedIds().map(id => this.pl.items.find(i => i.id === id))
+        .filter(it => it?.type === "clip").map(it => rawUrl("media", it.file));
+      if (!urls.length) return toast("클립을 먼저 선택하세요");
+      toast(await copyText(urls.join("\n")) ? `URL ${urls.length}개 복사됨` : urls.join("\n"), 2500);
+    });
     $("#pl-rename") && ($("#pl-rename").onclick = async () => {
       const name = await ask({ title: "리스트 이름", message: "SAVE 하면 이 이름으로 저장됩니다", input: this.pl.name || "", ok: "변경" });
       if (name) this.op("rename", { name });
